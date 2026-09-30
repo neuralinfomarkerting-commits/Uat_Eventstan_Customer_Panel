@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Calendar, ChevronDown, Search, X, Check, MapPin, Plus } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
@@ -10,7 +10,34 @@ import { customerApi, getEventMasters } from "@/api/customerApi";
 import type { Country } from "@/api/customerApi";
 import { showError, showSuccess } from "@/lib/toast";
 import { Address, AddressFormData, emptyAddressForm } from "@/components/profile/types";
-import { loadMockAddresses, saveMockAddresses, getDefaultAddress } from "@/lib/mockAddresses";
+import type { ApiAddress, AddressInput } from "@/api/customerApi";
+
+function toUiAddress(a: ApiAddress): Address {
+  return {
+    addressId: a.addressId,
+    addressLine1: a.addressLine1,
+    addressLine2: a.addressLine2 ?? "",
+    landmark: a.landmark ?? "",
+    poBoxNumber: a.poBoxNumber ?? "",
+    state: "Dubai",
+    city: "",
+    stateId: a.stateId ?? "",
+    cityId: a.cityId ?? "",
+    isDefault: a.isDefault,
+  };
+}
+
+function toApiAddressInput(form: AddressFormData): AddressInput {
+  return {
+    addressLine1: form.addressLine1.trim(),
+    addressLine2: form.addressLine2?.trim() || undefined,
+    landmark: form.landmark || undefined,
+    poBoxNumber: form.poBoxNumber || undefined,
+    isDefault: form.isDefault,
+    cityId: form.cityId || undefined,
+    stateId: form.stateId || undefined,
+  };
+}
 import AddressModal from "@/components/profile/AddressModal";
 
 function splitPhone(raw: string, countries: Country[]): { code: string; number: string } {
@@ -364,7 +391,7 @@ export default function UrgentBookingPage() {
 function UrgentBookingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user } = useAuth();
+  const { user, addAddress, updateAddress } = useAuth();
   const { items, total, count, loading: cartLoading } = useCart();
 
   const initialPhoneRaw = searchParams.get("phone") ?? user?.phone ?? "";
@@ -393,8 +420,8 @@ function UrgentBookingContent() {
   const [codeOpen, setCodeOpen] = useState(false);
   const [phoneFocused, setPhoneFocused] = useState(false);
 
-  // --- Address state (same pattern as checkout) ---
-  const [addresses, setAddresses] = useState<Address[]>([]);
+  // --- Address state (same pattern as checkout, backed by the live API) ---
+  const addresses = useMemo(() => (user?.addresses ?? []).map(toUiAddress), [user]);
   const [selectedAddressId, setSelectedAddressId] = useState<string>("");
   const [showAddressPicker, setShowAddressPicker] = useState(false);
   const [showAddressForm, setShowAddressForm] = useState(false);
@@ -403,10 +430,10 @@ function UrgentBookingContent() {
   const [savingAddress, setSavingAddress] = useState(false);
 
   useEffect(() => {
-    const loaded = loadMockAddresses();
-    setAddresses(loaded);
-    setSelectedAddressId(getDefaultAddress(loaded)?.addressId ?? "");
-  }, []);
+    if (selectedAddressId) return;
+    const def = addresses.find((a) => a.isDefault) ?? addresses[0];
+    if (def) setSelectedAddressId(def.addressId);
+  }, [addresses, selectedAddressId]);
 
   const selectedAddress = addresses.find((a) => a.addressId === selectedAddressId) ?? null;
 
@@ -437,24 +464,20 @@ function UrgentBookingContent() {
       return;
     }
     setSavingAddress(true);
-    let updated: Address[];
-    let targetId = editingAddressId;
-    if (editingAddressId) {
-      updated = addresses.map((a) =>
-        a.addressId === editingAddressId ? ({ ...addressForm, addressId: editingAddressId } as Address) : a
-      );
-    } else {
-      targetId = `ADDRESS_ID_${Date.now()}`;
-      const newAddr: Address = { ...addressForm, addressId: targetId } as Address;
-      updated = [...addresses, newAddr];
-    }
-    if (addressForm.isDefault && targetId) {
-      updated = updated.map((a) => ({ ...a, isDefault: a.addressId === targetId }));
-    }
-    setAddresses(updated);
-    saveMockAddresses(updated);
-    setSelectedAddressId(targetId ?? selectedAddressId);
+    const payload = toApiAddressInput(addressForm);
+    const result: { ok: boolean; error?: string; address?: ApiAddress } = editingAddressId
+      ? await updateAddress(editingAddressId, payload)
+      : await addAddress(payload);
     setSavingAddress(false);
+    if (!result.ok) {
+      showError(result.error || "Failed to save address");
+      return;
+    }
+    if (!editingAddressId && result.address) {
+      setSelectedAddressId(result.address.addressId);
+    } else if (editingAddressId) {
+      setSelectedAddressId(editingAddressId);
+    }
     setShowAddressForm(false);
     setShowAddressPicker(false);
     showSuccess(editingAddressId ? "Address updated!" : "Address added!");

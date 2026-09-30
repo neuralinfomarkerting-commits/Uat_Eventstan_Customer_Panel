@@ -1,5 +1,6 @@
+import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ChevronRight, AlertTriangle, XCircle, Ban, RotateCcw, ImageOff } from "lucide-react";
+import { ArrowLeft, ChevronRight, AlertTriangle, XCircle, Ban, RotateCcw, ImageOff, Star } from "lucide-react";
 import {
   STATUS_STYLES,
   STATUS_LABELS,
@@ -10,6 +11,7 @@ import {
   type PaymentStatus,
   type RefundRecord,
 } from "@/lib/mockBookings";
+import { customerApi } from "@/api/customerApi";
 import Row from "./Row";
 import Money from "./Money";
 
@@ -54,10 +56,52 @@ export default function DetailsScreen({
 }) {
   const statusStyle = STATUS_STYLES[status];
   const statusLabel = STATUS_LABELS[status];
-  const paymentStatusLabel = PAYMENT_STATUS_LABELS[paymentStatus];
-  const paymentStatusClass = PAYMENT_STATUS_STYLES[paymentStatus];
+
+  const displayPaymentStatus: PaymentStatus =
+    paymentStatus === "REFUNDED" || paymentStatus === "FAILED"
+      ? paymentStatus
+      : isFullyPaid
+      ? "FULLY_PAID"
+      : paid > 0
+      ? "PARTIALLY_PAID"
+      : "PENDING";
+
+  const paymentStatusLabel = PAYMENT_STATUS_LABELS[displayPaymentStatus];
+  const paymentStatusClass = PAYMENT_STATUS_STYLES[displayPaymentStatus];
   const needsFullPayment =
-    status === "CONFIRMED" && paymentStatus === "PARTIALLY_PAID";
+    status === "CONFIRMED" && displayPaymentStatus === "PARTIALLY_PAID";
+
+  const [reviewRating, setReviewRating] = useState<Record<string, number>>({});
+  const [reviewComment, setReviewComment] = useState<Record<string, string>>({});
+  const [reviewSubmitted, setReviewSubmitted] = useState<Record<string, boolean>>({});
+  const [reviewSubmitting, setReviewSubmitting] = useState<Record<string, boolean>>({});
+  const [reviewError, setReviewError] = useState<Record<string, string>>({});
+
+  // POST /reviews — submit a post-event review for a completed booking item.
+  const submitReview = async (bookingId: string) => {
+    const rating = reviewRating[bookingId] ?? 0;
+    if (!rating) {
+      setReviewError((prev) => ({ ...prev, [bookingId]: "Please select a star rating." }));
+      return;
+    }
+    setReviewSubmitting((prev) => ({ ...prev, [bookingId]: true }));
+    setReviewError((prev) => ({ ...prev, [bookingId]: "" }));
+    try {
+      await customerApi.reviews.submit({
+        bookingId,
+        rating,
+        comment: reviewComment[bookingId],
+      });
+      setReviewSubmitted((prev) => ({ ...prev, [bookingId]: true }));
+    } catch (error) {
+      setReviewError((prev) => ({
+        ...prev,
+        [bookingId]: error instanceof Error ? error.message : "Failed to submit review.",
+      }));
+    } finally {
+      setReviewSubmitting((prev) => ({ ...prev, [bookingId]: false }));
+    }
+  };
 
   return (
     <div>
@@ -150,10 +194,10 @@ export default function DetailsScreen({
           <div className="flex items-start justify-between mb-1">
             <div>
               <span className="text-[11px] font-bold text-orange-500 uppercase tracking-wide">
-                Checkout ID
+                Order ID
               </span>
               <p className="font-mono font-bold text-gray-900 text-lg">
-                {booking.id}
+                {booking.bookingId}
               </p>
             </div>
             <span
@@ -165,9 +209,15 @@ export default function DetailsScreen({
 
           <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm text-gray-500 mt-3 mb-5 border-b border-gray-100 pb-5">
             <span>
-              Booking Date{" "}
+              Booked On{" "}
               <span className="text-gray-900 font-medium ml-1">
-                {formatDateDDMMYYYY(booking.bookingDate)}
+                {formatDateDDMMYYYY(booking.createdAt)}
+              </span>
+            </span>
+            <span>
+              Event Date{" "}
+              <span className="text-gray-900 font-medium ml-1">
+                {formatDateDDMMYYYY(booking.eventDate)}
               </span>
             </span>
             <span>
@@ -206,9 +256,6 @@ export default function DetailsScreen({
                 )}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-mono text-orange-500 font-semibold">
-                      {pkg.bookingId}
-                    </span>
                     <span
                       className={`px-2 py-0.5 rounded-full text-[10px] font-semibold flex-shrink-0 ${statusStyle}`}
                     >
@@ -234,6 +281,61 @@ export default function DetailsScreen({
                   </div>
                   <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0 hidden sm:block" />
                 </div>
+
+                {status === "COMPLETED" && (
+                  <div className="w-full border-t border-gray-100 pt-3 mt-1">
+                    {reviewSubmitted[pkg.bookingId] ? (
+                      <p className="text-xs text-green-600 font-medium">
+                        Thanks — your review has been submitted.
+                      </p>
+                    ) : (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-700 mb-1.5">
+                          Rate this package
+                        </p>
+                        <div className="flex items-center gap-1 mb-2">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              type="button"
+                              onClick={() =>
+                                setReviewRating((prev) => ({ ...prev, [pkg.bookingId]: star }))
+                              }
+                              className="p-0.5"
+                            >
+                              <Star
+                                className={`w-4 h-4 ${
+                                  (reviewRating[pkg.bookingId] ?? 0) >= star
+                                    ? "fill-orange-400 text-orange-400"
+                                    : "text-gray-300"
+                                }`}
+                              />
+                            </button>
+                          ))}
+                        </div>
+                        <textarea
+                          value={reviewComment[pkg.bookingId] ?? ""}
+                          onChange={(e) =>
+                            setReviewComment((prev) => ({ ...prev, [pkg.bookingId]: e.target.value }))
+                          }
+                          placeholder="Share your experience (optional)"
+                          rows={2}
+                          className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:border-orange-400"
+                        />
+                        {reviewError[pkg.bookingId] && (
+                          <p className="text-[11px] text-red-600 mt-1">{reviewError[pkg.bookingId]}</p>
+                        )}
+                        <button
+                          onClick={() => submitReview(pkg.bookingId)}
+                          disabled={reviewSubmitting[pkg.bookingId]}
+                          className="mt-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white text-xs font-semibold px-3.5 py-1.5 rounded-full"
+                        >
+                          {reviewSubmitting[pkg.bookingId] ? "Submitting..." : "Submit Review"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>

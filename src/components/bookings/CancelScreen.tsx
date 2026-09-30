@@ -8,6 +8,7 @@ export default function CancelScreen({
   cancelling,
   onConfirm,
   onBack,
+  errorMessage,
 }: {
   checkoutId: string;
   currency: string;
@@ -15,6 +16,7 @@ export default function CancelScreen({
   cancelling: boolean;
   onConfirm: () => void;
   onBack: () => void;
+  errorMessage?: string | null;
 }) {
   return (
     <div className="max-w-sm mx-auto text-center py-10">
@@ -44,6 +46,9 @@ export default function CancelScreen({
         </div>
       )}
 
+      {errorMessage && (
+        <p className="text-sm text-red-600 mb-3">{errorMessage}</p>
+      )}
       <button
         onClick={onConfirm}
         disabled={cancelling}

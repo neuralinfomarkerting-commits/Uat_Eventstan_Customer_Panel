@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { AddressFormData } from "./types";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import { useUaeLocations } from "@/lib/useUaeLocations";
@@ -14,7 +15,29 @@ interface AddressModalProps {
 }
 
 export default function AddressModal({ isEditing, form, saving, onChange, onSubmit, onClose }: AddressModalProps) {
-  const { stateName, cities, loading: locationsLoading } = useUaeLocations();
+  const { stateName, stateId, cities, loading: locationsLoading } = useUaeLocations();
+
+  
+  useEffect(() => {
+    if (stateId && form.stateId !== stateId) {
+      onChange("stateId", stateId);
+    }
+  }, [stateId, form.stateId, onChange]);
+
+  const handleCityChange = (name: string) => {
+    onChange("city", name);
+    const match = cities.find((c) => c.name === name);
+    onChange("cityId", match?.id ?? "");
+  };
+
+  
+  
+  useEffect(() => {
+    if (form.cityId && !form.city && cities.length > 0) {
+      const match = cities.find((c) => c.id === form.cityId);
+      if (match) onChange("city", match.name);
+    }
+  }, [form.cityId, form.city, cities, onChange]);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
@@ -48,8 +71,7 @@ export default function AddressModal({ isEditing, form, saving, onChange, onSubm
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">State *</label>
-              {/* Platform currently only operates in Dubai, so this is fixed —
-                  the name still comes from the live /master-data/states API. */}
+              {}
               <input
                 type="text"
                 value={form.state || stateName}
@@ -62,8 +84,8 @@ export default function AddressModal({ isEditing, form, saving, onChange, onSubm
               <label className="block text-xs font-medium text-gray-600 mb-1.5">City *</label>
               <SearchableSelect
                 value={form.city}
-                onChange={(value) => onChange("city", value)}
-                options={cities}
+                onChange={handleCityChange}
+                options={cities.map((c) => c.name)}
                 placeholder={locationsLoading ? "Loading cities..." : "Select city..."}
                 searchPlaceholder="Search city..."
                 disabled={locationsLoading}

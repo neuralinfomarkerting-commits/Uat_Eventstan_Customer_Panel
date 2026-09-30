@@ -96,7 +96,8 @@ export default function ConfigureCartModal({
 
   const s = service as any;
   const imageUrl =
-    p.image_url ?? p.image ?? p.images?.[0] ?? s.image_url ?? s.gallery?.[0];
+    p.image_url || p.imageUrl || p.image || p.images?.[0] || s?.image_url || s?.imageUrl || s?.gallery?.[0] ||
+    p.items?.[0]?.service?.imageUrl || p.items?.[0]?.service?.image_url;
 
   const handleAdd = () => {
     if (isEdit) {

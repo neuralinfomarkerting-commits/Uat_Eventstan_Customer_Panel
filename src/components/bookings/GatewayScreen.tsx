@@ -1,27 +1,75 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ShieldCheck } from "lucide-react";
-import CurrencySymbol from "@/components/ui/CurrencySymbol";
+import { customerApi } from "@/api/customerApi";
+import StripePaymentForm from "@/components/ui/StripePaymentForm";
 
 export default function GatewayScreen({
+  bookingId,
+  bookingIds,
   amount,
   currency,
   onSuccess,
   onFailure,
 }: {
+  bookingId: string;
+  bookingIds?: string[];
   amount: number;
   currency: string;
   onSuccess: () => void;
   onFailure: () => void;
 }) {
-  const [processing, setProcessing] = useState(false);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [loadingIntent, setLoadingIntent] = useState(true);
+  const [intentError, setIntentError] = useState("");
+  const paymentIdByIntent = useRef<Record<string, string>>({});
 
-  const submit = () => {
-    setProcessing(true);
-    setTimeout(() => {
-      setProcessing(false);
+  useEffect(() => {
+    let cancelled = false;
+
+    const createIntent = async () => {
+      setLoadingIntent(true);
+      setIntentError("");
+      try {
+        const core = await customerApi.bookings.resolveCore([bookingId, ...(bookingIds ?? [])]);
+        if (!core) throw new Error("Booking not found");
+        const res = await customerApi.payments.createIntent({
+          bookingId: core.id,
+          paymentType: "REMAINING",
+        });
+        if (res.id && res.paymentIntentId) {
+          paymentIdByIntent.current[res.paymentIntentId] = res.id;
+        }
+        if (cancelled) return;
+        if (!res.clientSecret) {
+          throw new Error("Payment gateway did not return a client secret.");
+        }
+        setClientSecret(res.clientSecret);
+      } catch (cause) {
+        if (cancelled) return;
+        const msg =
+          cause instanceof Error ? cause.message : "Could not start payment. Please try again.";
+        setIntentError(msg);
+      } finally {
+        if (!cancelled) setLoadingIntent(false);
+      }
+    };
+
+    createIntent();
+    return () => {
+      cancelled = true;
+    };
+  }, [bookingId, bookingIds]);
+  const handlePaymentSuccess = async (paymentIntentId: string) => {
+    try {
+      await customerApi.payments.verify(
+        paymentIdByIntent.current[paymentIntentId] ?? paymentIntentId,
+      );
       onSuccess();
-    }, 900);
+    } catch (cause) {
+      console.error("Failed to confirm payment:", cause);
+      onFailure();
+    }
   };
 
   return (
@@ -35,67 +83,28 @@ export default function GatewayScreen({
         </span>
       </div>
 
-      <p className="text-xs text-gray-400">Paying EventStan</p>
-      <p className="flex items-baseline justify-center gap-1.5 text-3xl font-bold text-gray-900 mb-1 whitespace-nowrap">
-        <CurrencySymbol
+      {loadingIntent && (
+        <p className="text-sm text-gray-400 py-8">Setting up secure payment…</p>
+      )}
+
+      {!loadingIntent && intentError && (
+        <div className="text-sm text-red-500 py-8">{intentError}</div>
+      )}
+
+      {!loadingIntent && !intentError && clientSecret && (
+        <StripePaymentForm
+          clientSecret={clientSecret}
+          amount={amount}
           currency={currency}
-          className="text-xl leading-none flex-shrink-0"
+          onSuccess={handlePaymentSuccess}
+          onError={() => onFailure()}
         />
-        <span>{amount.toLocaleString()}</span>
-      </p>
-      <p className="text-xs text-gray-400 mb-6">Checkout for booking payment</p>
-
-      <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm text-left">
-        <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
-          Card information
-        </label>
-        <div className="mt-1.5 border border-gray-200 rounded-t-lg overflow-hidden focus-within:ring-2 focus-within:ring-[#635BFF]/30 focus-within:border-[#635BFF]">
-          <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-200">
-            <span className="text-sm text-gray-400 font-mono">
-              4242 4242 4242 4242
-            </span>
-            <span className="flex items-center gap-1 text-[9px] font-bold text-gray-400">
-              <span className="border border-gray-200 rounded px-1 py-0.5">
-                VISA
-              </span>
-            </span>
-          </div>
-          <div className="flex">
-            <div className="flex-1 px-3 py-2.5 border-r border-gray-200 text-sm text-gray-400">
-              MM / YY
-            </div>
-            <div className="flex-1 px-3 py-2.5 text-sm text-gray-400">CVC</div>
-          </div>
-        </div>
-        <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mt-3 block">
-          Cardholder name
-        </label>
-        <div className="mt-1.5 border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-400">
-          Full name on card
-        </div>
-
-        <button
-          onClick={submit}
-          disabled={processing}
-          className="w-full mt-4 bg-[#635BFF] hover:bg-[#5548e8] disabled:opacity-60 text-white py-2.5 rounded-lg font-semibold text-sm transition-colors"
-        >
-          {processing
-            ? "Processing..."
-            : `Pay ${currency} ${amount.toLocaleString()}`}
-        </button>
-      </div>
+      )}
 
       <div className="flex items-center justify-center gap-1.5 text-[11px] text-gray-400 mt-4">
         <ShieldCheck className="w-3.5 h-3.5" /> Powered by Stripe · 256-bit SSL
         · PCI DSS Compliant
       </div>
-
-      <button
-        onClick={onFailure}
-        className="text-xs text-gray-300 hover:text-gray-400 mt-4 underline"
-      >
-        Simulate failed payment
-      </button>
     </div>
   );
 }

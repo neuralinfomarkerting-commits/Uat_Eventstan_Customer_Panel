@@ -57,7 +57,7 @@ export default function BookingCard({ booking }: BookingCardProps) {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 text-xs sm:text-sm border-t border-gray-100 pt-4">
         <div>
           <span className="text-gray-400 block mb-1">Booking ID</span>
-          <span className="font-mono font-medium text-gray-900 truncate block">{booking.id}</span>
+          <span className="font-mono font-medium text-gray-900 truncate block">{booking.bookingId}</span>
         </div>
         <div>
           <span className="text-gray-400 block mb-1">Event Date</span>

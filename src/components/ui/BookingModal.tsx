@@ -1,4 +1,5 @@
 "use client";
+import { formatTimeInput, isValidTime } from "@/lib/timeInput";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, usePathname } from "next/navigation";
@@ -555,7 +556,14 @@ export default function BookingModal({ pkg, service, onClose }: Props) {
   const title = p?.title ?? p?.name ?? service?.title ?? "";
   const vendorName = service?.vendor_name ?? "";
   const category = service?.category ?? "";
-  const imageUrl = p?.imageUrl ?? p?.image_url ?? service?.image_url ?? "";
+  const imageUrl =
+    p?.imageUrl ||
+    p?.image_url ||
+    service?.image_url ||
+    service?.imageUrl ||
+    p?.items?.[0]?.service?.imageUrl ||
+    p?.items?.[0]?.service?.image_url ||
+    "";
   const isRental = String(category).toLowerCase().includes("rental") || Boolean(p?.is_rental ?? p?.isRental);
   const isPerPerson = priceUnit.toLowerCase().includes("person");
   const isPerDay = priceUnit.toLowerCase().includes("day");
@@ -591,13 +599,27 @@ export default function BookingModal({ pkg, service, onClose }: Props) {
   const inputClass =
     "w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-orange-400 transition-colors bg-white";
 
+  const startTimeError =
+    form.eventStartTime && !isValidTime(form.eventStartTime)
+      ? "Use 24-hour HH:mm, e.g. 09:30 or 18:00."
+      : "";
+  const endTimeError =
+    form.eventEndTime && !isValidTime(form.eventEndTime)
+      ? "Use 24-hour HH:mm, e.g. 09:30 or 18:00."
+      : isValidTime(form.eventStartTime) &&
+          isValidTime(form.eventEndTime) &&
+          form.eventEndTime <= form.eventStartTime
+        ? "End time must be after start time."
+        : "";
+
   const isFormValid =
     !!form.fullName &&
     !!form.email &&
     !!form.eventDate &&
     form.eventDate >= minEventDate &&
-    !!form.eventStartTime &&
-    !!form.eventEndTime &&
+    isValidTime(form.eventStartTime) &&
+    isValidTime(form.eventEndTime) &&
+    form.eventEndTime > form.eventStartTime &&
     !!form.eventType.trim() &&
     (!isPerPerson || !!form.numGuests);
 
@@ -630,6 +652,7 @@ export default function BookingModal({ pkg, service, onClose }: Props) {
       title,
       vendorName,
       category,
+      imageUrl,
       basePrice,
       priceUnit,
       isRental,
@@ -766,22 +789,34 @@ export default function BookingModal({ pkg, service, onClose }: Props) {
                   Start Time <span className="text-orange-400">*</span>
                 </label>
                 <input
-                  type="time"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="HH:mm"
+                  maxLength={5}
                   value={form.eventStartTime}
-                  onChange={set("eventStartTime")}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, eventStartTime: formatTimeInput(e.target.value) }))
+                  }
                   className={inputClass}
                 />
+                {startTimeError && <p className="text-xs text-red-500 mt-1">{startTimeError}</p>}
               </div>
               <div>
                 <label className="text-xs font-semibold text-gray-700 mb-1 block">
                   End Time <span className="text-orange-400">*</span>
                 </label>
                 <input
-                  type="time"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="HH:mm"
+                  maxLength={5}
                   value={form.eventEndTime}
-                  onChange={set("eventEndTime")}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, eventEndTime: formatTimeInput(e.target.value) }))
+                  }
                   className={inputClass}
                 />
+                {endTimeError && <p className="text-xs text-red-500 mt-1">{endTimeError}</p>}
               </div>
             </div>
 

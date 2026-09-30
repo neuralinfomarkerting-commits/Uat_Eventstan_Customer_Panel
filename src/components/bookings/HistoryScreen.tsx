@@ -1,8 +1,61 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, RotateCcw } from "lucide-react";
-import { type PaymentRecord, type RefundRecord, type BookingItem } from "@/lib/mockBookings";
+import { ArrowLeft, RotateCcw, Copy, Check } from "lucide-react";
+import {
+  type PaymentRecord,
+  type RefundRecord,
+  type BookingItem,
+} from "@/lib/mockBookings";
 import DownloadReceiptButton from "@/components/receipt/DownloadReceiptButton";
 import Money from "./Money";
+
+function formatDateTime(value?: string | null): string {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return value;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${get("day")} ${get("month")} ${get("year")}, ${get("hour")}:${get("minute")}`;
+}
+
+function TransactionId({ id, label }: { id: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(id);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+    }
+  };
+  return (
+    <div className="flex items-center gap-1.5 mt-1 min-w-0">
+      <span className="text-[10px] uppercase font-semibold text-gray-400 flex-shrink-0">
+        {label}
+      </span>
+      <span className="font-mono text-[11px] text-gray-600 truncate" title={id}>
+        {id}
+      </span>
+      <button
+        type="button"
+        onClick={copy}
+        aria-label={`Copy ${label}`}
+        className="text-gray-400 hover:text-orange-500 flex-shrink-0"
+      >
+        {copied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
+      </button>
+    </div>
+  );
+}
 
 export default function HistoryScreen({
   checkoutId,
@@ -92,9 +145,28 @@ export default function HistoryScreen({
           </div>
           <div>
             <span className="text-gray-400 block mb-1">Remaining Amount</span>
-            <span className="font-bold text-orange-500">
-              <Money value={remaining} currency={currency} />
-            </span>
+            {isFullyPaid ? (
+              <span className="inline-flex items-center gap-1 font-bold text-green-600">
+                <svg
+                  className="w-3.5 h-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2.5}
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+                Fully Paid
+              </span>
+            ) : (
+              <span className="font-bold text-orange-500">
+                <Money value={remaining} currency={currency} />
+              </span>
+            )}
           </div>
         </div>
 
@@ -161,7 +233,11 @@ export default function HistoryScreen({
                     {payment.label}
                   </span>
                 </div>
-                <p className="text-xs text-gray-400 mt-0.5">{payment.date}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(payment.date)}</p>
+                {payment.transactionId && (
+                  <TransactionId id={payment.transactionId} label="Stripe Transaction ID" />
+                )}
+                {payment.paymentId && <TransactionId id={payment.paymentId} label="Payment ID" />}
               </div>
               <div className="text-right flex-shrink-0">
                 <p className="font-bold text-gray-900 text-sm">
@@ -188,7 +264,7 @@ export default function HistoryScreen({
                     {refund.reason}
                   </span>
                 </div>
-                <p className="text-xs text-gray-400 mt-0.5">{refund.date}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(refund.date)}</p>
               </div>
               <div className="text-right flex-shrink-0">
                 <p className="font-bold text-gray-900 text-sm flex items-center justify-end gap-1">
@@ -221,8 +297,8 @@ export default function HistoryScreen({
           paid={paid}
           remaining={remaining}
           isFullyPaid={isFullyPaid}
-          payments={payments}
-          refund={refund}
+          payments={payments.map((p) => ({ ...p, date: formatDateTime(p.date) }))}
+          refund={refund ? { ...refund, date: formatDateTime(refund.date) } : refund}
           items={items}
           eventAddress={eventAddress}
           bookingDate={bookingDate}

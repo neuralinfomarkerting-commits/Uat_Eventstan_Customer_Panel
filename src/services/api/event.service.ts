@@ -1,5 +1,3 @@
-// services/category.service.ts
-
 export interface Category {
   id: string;
   name: string;
@@ -17,14 +15,11 @@ export interface CategoryWithMetadata extends Category {
   img: string;
 }
 
-// Client-side calls go through the Next.js rewrite proxy (no CORS issue),
-// server-side calls hit the real API directly.
 const isServer = typeof window === "undefined";
 const API_BASE_URL = isServer
-  ? `${process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, "") ?? "https://api.eventstan.com"}/api/v1`
+  ? `${process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, "")}/api/v1`
   : "/api/proxy";
 
-// Static metadata for categories
 const CATEGORY_METADATA: Record<string, { desc: string; icon: string; img: string }> = {
   Venue: {
     desc: "Halls, gardens, resorts & unique spaces",
@@ -79,9 +74,6 @@ export class CategoryService {
     return CategoryService.instance;
   }
 
-  /**
-   * Fetch all categories from API
-   */
   async fetchCategories(): Promise<Category[]> {
     try {
       const response = await fetch(`${this.baseUrl}/master-data/categories`, {

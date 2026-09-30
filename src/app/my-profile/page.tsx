@@ -4,9 +4,52 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { showSuccess } from "@/lib/toast";
-import { Address, AddressFormData, emptyAddressForm, Tab } from "@/components/profile/types";
-import { customerApi } from "@/api/customerApi";
-import type { Country } from "@/api/customerApi";
+import { AddressFormData, emptyAddressForm, Tab } from "@/components/profile/types";
+import { customerApi, uploadImage } from "@/api/customerApi";
+import type { Country, ApiAddress, AddressInput } from "@/api/customerApi";
+import { useUaeLocations } from "@/lib/useUaeLocations";
+
+function toUiAddress(a: ApiAddress, cityNameById: Map<string, string>): import("@/components/profile/types").Address {
+  return {
+    addressId: a.addressId,
+    addressLine1: a.addressLine1,
+    addressLine2: a.addressLine2 ?? "",
+    landmark: a.landmark ?? "",
+    poBoxNumber: a.poBoxNumber ?? "",
+    state: "Dubai",
+    city: (a.cityId && cityNameById.get(a.cityId)) || "",
+    stateId: a.stateId ?? "",
+    cityId: a.cityId ?? "",
+    isDefault: a.isDefault,
+  };
+}
+
+function toApiAddressInput(form: AddressFormData): AddressInput {
+  return {
+    addressLine1: form.addressLine1.trim(),
+    addressLine2: form.addressLine2 || undefined,
+    landmark: form.landmark || undefined,
+    poBoxNumber: form.poBoxNumber || undefined,
+    isDefault: form.isDefault,
+    cityId: form.cityId || undefined,
+    stateId: form.stateId || undefined,
+  };
+}
+
+function ddmmyyyyToIso(value: string): string | undefined {
+  const match = value.trim().match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (!match) return undefined;
+  const [, dd, mm, yyyy] = match;
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function isoToDdmmyyyy(value?: string | null): string {
+  if (!value) return "";
+  const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return "";
+  const [, yyyy, mm, dd] = match;
+  return `${dd}-${mm}-${yyyy}`;
+}
 import Sidebar from "@/components/profile/Sidebar";
 import PersonalInfoTab from "@/components/profile/PersonalInfoTab";
 import AddressesTab from "@/components/profile/AddressesTab";
@@ -31,7 +74,7 @@ function splitPhone(raw: string, countries: Country[]): { code: string; number: 
 }
 
 export default function ProfilePage() {
-  const { user, loading, logout, updateProfile } = useAuth();
+  const { user, loading, logout, updateProfile, addAddress, updateAddress, deleteAddress } = useAuth();
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("personal");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -43,6 +86,7 @@ export default function ProfilePage() {
   const [gender, setGender] = useState("");
   const [dob, setDob] = useState("");
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const [countries, setCountries] = useState<Country[]>([]);
@@ -58,7 +102,9 @@ export default function ProfilePage() {
     };
   }, []);
 
-  const [addresses, setAddresses] = useState<Address[]>([]);
+  const { cities: uaeCities } = useUaeLocations();
+  const cityNameById = new Map(uaeCities.map((c) => [c.id, c.name]));
+  const addresses = (user?.addresses ?? []).map((a) => toUiAddress(a, cityNameById));
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [addressForm, setAddressForm] = useState<AddressFormData>(emptyAddressForm);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -71,14 +117,21 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (user) {
-      const parts = user.name.trim().split(" ");
-      setFirstName(parts[0] ?? "");
-      setLastName(parts.slice(1).join(" ") ?? "");
+      if (user.firstName || user.lastName) {
+        setFirstName(user.firstName ?? "");
+        setLastName(user.lastName ?? "");
+      } else {
+        const parts = user.name.trim().split(" ");
+        setFirstName(parts[0] ?? "");
+        setLastName(parts.slice(1).join(" ") ?? "");
+      }
       setEmail(user.email ?? "");
-      const rawPhone = user.phone ?? "";
+      setGender(user.gender ?? "");
+      setDob(isoToDdmmyyyy(user.dateOfBirth));
+      const rawPhone = user.phone ?? (user.countryCode ? `${user.countryCode}${user.mobile ?? ""}` : "");
       const { code, number } = splitPhone(rawPhone, countries);
-      setCountryCode(code);
-      setPhone(number);
+      setCountryCode(user.countryCode || code);
+      setPhone(user.mobile ?? number);
     }
   }, [user, countries]);
 
@@ -100,33 +153,65 @@ export default function ProfilePage() {
     setSaving(true);
 
     const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
-    const fullPhone = phone.trim() ? `${countryCode}${phone.trim()}` : "";
-    const result = await updateProfile({ name: fullName || user.name, phone: fullPhone || undefined });
+    const result = await updateProfile({
+      name: fullName || user.name,
+      firstName: firstName.trim() || undefined,
+      lastName: lastName.trim() || undefined,
+      phone: phone.trim() || undefined,
+      countryCode: countryCode || undefined,
+      gender: (gender as "MALE" | "FEMALE" | "OTHER" | "PREFER_NOT_TO_SAY") || undefined,
+      dateOfBirth: ddmmyyyyToIso(dob),
+    });
 
     setSaving(false);
     if (result.ok) {
       toast.success("Profile updated successfully!", { style: { borderRadius: "12px", fontWeight: "600" } });
-      if (gender || dob) {
-        toast.error("Gender and Date of Birth do not exist in the system yet.", { duration: 4000 });
-      }
     } else {
       toast.error(result.error || "Failed to update profile.");
     }
   };
 
-  const handleLogout = () => {
-    logout();
+  const handlePhotoSelect = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image must be smaller than 5MB.");
+      return;
+    }
+    setUploadingPhoto(true);
+    try {
+      const uploaded = await uploadImage(file, "customers");
+      const result = await updateProfile({ profileImage: uploaded.url });
+      if (result.ok) {
+        toast.success("Profile photo updated!");
+      } else {
+        toast.error(result.error || "Failed to save profile photo.");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to upload photo.");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleLogout = () => {    logout();
     setShowLogoutModal(false);
     showSuccess("Logged out successfully!");
     router.push("/");
   };
 
   const openAddAddress = () => {
-    toast.error("This feature is not available yet.");
+    setEditingId(null);
+    setAddressForm(emptyAddressForm);
+    setShowAddressModal(true);
   };
 
-  const openEditAddress = () => {
-    toast.error("This feature is not available yet.");
+  const openEditAddress = (address: (typeof addresses)[number]) => {
+    setEditingId(address.addressId);
+    setAddressForm({ ...address });
+    setShowAddressModal(true);
   };
 
   const handleAddressFormChange = (field: keyof AddressFormData, value: string | boolean) => {
@@ -135,16 +220,39 @@ export default function ProfilePage() {
 
   const handleSaveAddress = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.error("This feature is not available yet.");
+    if (!addressForm.addressLine1.trim()) {
+      toast.error("Address Line 1 is required.");
+      return;
+    }
+    setSavingAddress(true);
+    const payload = toApiAddressInput(addressForm);
+    const result = editingId ? await updateAddress(editingId, payload) : await addAddress(payload);
+    setSavingAddress(false);
+    if (result.ok) {
+      toast.success(editingId ? "Address updated!" : "Address added!");
+      setShowAddressModal(false);
+      setEditingId(null);
+      setAddressForm(emptyAddressForm);
+    } else {
+      toast.error(result.error || "Failed to save address.");
+    }
   };
 
-  const handleSetDefault = () => {
-    toast.error("This feature is not available yet.");
+  const handleSetDefault = async (id: string) => {
+    const target = addresses.find((a) => a.addressId === id);
+    if (!target) return;
+    const result = await updateAddress(id, { ...toApiAddressInput(target as unknown as AddressFormData), isDefault: true });
+    if (result.ok) showSuccess("Default address updated!");
+    else toast.error(result.error || "Failed to set default address.");
   };
 
-  const handleDeleteAddress = () => {
-    toast.error("This feature is not available yet.");
+  const handleDeleteAddress = async () => {
+    if (!deleteId) return;
+    const id = deleteId;
     setDeleteId(null);
+    const result = await deleteAddress(id);
+    if (result.ok) showSuccess("Address removed.");
+    else toast.error(result.error || "Failed to remove address.");
   };
 
   return (
@@ -178,6 +286,7 @@ export default function ProfilePage() {
               {tab === "personal" && (
                 <PersonalInfoTab
                   user={user} avatarColor={avatarColor}
+                  profileImage={user.profileImage} uploadingPhoto={uploadingPhoto} onPhotoSelect={handlePhotoSelect}
                   firstName={firstName} lastName={lastName} email={email} phone={phone} gender={gender} dob={dob}
                   saving={saving}
                   countryCode={countryCode} countries={countries}

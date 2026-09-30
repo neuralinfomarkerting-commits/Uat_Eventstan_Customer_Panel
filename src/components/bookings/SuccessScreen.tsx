@@ -32,7 +32,7 @@ export default function SuccessScreen({
       </p>
 
       <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5 text-left space-y-2.5 mb-6">
-        <Row label="Checkout ID" value={checkoutId} mono />
+        <Row label="Booking ID" value={checkoutId} mono />
         <Row
           label="Total Amount"
           value={<Money value={totalAmount} currency={currency} />}

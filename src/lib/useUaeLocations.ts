@@ -4,28 +4,28 @@ import { useEffect, useRef, useState } from "react";
 import { locationService, UAE_COUNTRY_ID } from "@/services/api/location.service";
 import { DEFAULT_UAE_STATE, DUBAI_CITIES } from "@/lib/uaeLocations";
 
+export interface CityOption {
+  id: string;
+  name: string;
+}
+
 interface UseUaeLocationsResult {
-  /** Display name of the fixed state (e.g. "Dubai"). Always populated. */
+  
   stateName: string;
-  /** Resolved master-data id for the state, once loaded from the API. */
+  
   stateId: string | null;
-  /** City names for the resolved state, for the searchable dropdown. */
-  cities: string[];
+  
+  cities: CityOption[];
   loading: boolean;
-  /** True if we had to fall back to the static local list. */
+  
   usedFallback: boolean;
 }
 
-// The platform currently only operates in one emirate. We fetch the real
-// list of states from the API and pick the one matching this name (so if
-// the backend ever renames/re-ids it, this still resolves correctly);
-// its cities are then fetched from the API too. If either call fails,
-// we fall back to the static DUBAI_CITIES list so the form still works.
-const TARGET_STATE_NAME = DEFAULT_UAE_STATE; // "Dubai"
+const TARGET_STATE_NAME = DEFAULT_UAE_STATE; 
 
 export function useUaeLocations(): UseUaeLocationsResult {
   const [stateId, setStateId] = useState<string | null>(null);
-  const [cities, setCities] = useState<string[]>([]);
+  const [cities, setCities] = useState<CityOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [usedFallback, setUsedFallback] = useState(false);
   const cancelled = useRef(false);
@@ -49,14 +49,16 @@ export function useUaeLocations(): UseUaeLocationsResult {
         const stateCities = await locationService.fetchCities(match.id, UAE_COUNTRY_ID);
         if (cancelled.current) return;
 
-        const names = stateCities.map((c) => c.name).filter(Boolean);
-        setCities(names.length > 0 ? names : DUBAI_CITIES);
-        setUsedFallback(names.length === 0);
+        const options = stateCities
+          .filter((c) => c.name)
+          .map((c) => ({ id: c.id, name: c.name }));
+        setCities(options.length > 0 ? options : DUBAI_CITIES.map((name) => ({ id: name, name })));
+        setUsedFallback(options.length === 0);
       } catch (error) {
         console.error("Falling back to static Dubai locations list:", error);
         if (cancelled.current) return;
         setStateId(null);
-        setCities(DUBAI_CITIES);
+        setCities(DUBAI_CITIES.map((name) => ({ id: name, name })));
         setUsedFallback(true);
       } finally {
         if (!cancelled.current) setLoading(false);

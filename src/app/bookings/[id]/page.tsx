@@ -3,12 +3,13 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
-import { customerApi } from "@/api/customerApi";
+import { useUaeLocations } from "@/lib/useUaeLocations";
+import { formatAddressById } from "@/lib/formatAddress";
+import { customerApi, getPackages, getServices } from "@/api/customerApi";
 import Confetti from "@/components/ui/Confetti";
 import {
-  getBookingById,
   mapMyBookingToBooking,
-  STATIC_BOOKINGS,
+  syncBookingsWithCore,
   TERMINAL_STATUSES,
   type Booking,
   type BookingStatus,
@@ -27,6 +28,13 @@ import CancelledScreen from "@/components/bookings/CancelledScreen";
 import RefundScreen from "@/components/bookings/RefundScreen";
 import RefundedScreen from "@/components/bookings/RefundedScreen";
 
+function resolveImage(...candidates: Array<string | undefined | null>): string {
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate;
+  }
+  return "";
+}
+
 type Step =
   | "details"
   | "pay"
@@ -39,23 +47,24 @@ type Step =
   | "refund"
   | "refunded";
 
-type PaymentMethod = "card" | "apple" | "google" | "other";
-
 export default function BookingDetailsPage() {
   const { user, loading: authLoading } = useAuth();
+  const { cities: uaeCities } = useUaeLocations();
   const router = useRouter();
   const params = useParams();
   const checkoutId =
     typeof params?.id === "string"
       ? params.id
-      : "CHECKOUT_ID_001";
+      : "";
 
   const [booking, setBooking] = useState<Booking | null>(null);
   const [bookingLoading, setBookingLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  // Real load failure (API/network/auth) - kept separate from "booking not found".
+  const [loadError, setLoadError] = useState<string | null>(null);
   const currency = booking?.currency ?? "AED";
 
   const [step, setStep] = useState<Step>("details");
-  const [method, setMethod] = useState<PaymentMethod>("card");
   const [confettiTrigger, setConfettiTrigger] = useState(0);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [status, setStatus] = useState<BookingStatus>("IN_PROCESS");
@@ -64,6 +73,7 @@ export default function BookingDetailsPage() {
   const [refundReason, setRefundReason] = useState("Change of plans");
   const [cancelling, setCancelling] = useState(false);
   const [refunding, setRefunding] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -74,30 +84,70 @@ export default function BookingDetailsPage() {
 
     customerApi.bookings
       .list(user.id)
-      .then((result) => {
-        const list = Array.isArray(result) ? result.map(mapMyBookingToBooking) : [];
+      .then(async (result) => {
+        const rows = Array.isArray(result) ? result : [];
+        let imageByPackageId = new Map<string, string>();
+        try {
+          const [packages, services] = await Promise.all([getPackages(), getServices()]);
+          const serviceById = new Map(services.map((s) => [s.id, s]));
+          imageByPackageId = new Map(
+            packages.map((p) => {
+              const pAny = p as any;
+              const service = serviceById.get(p.service_id);
+              return [
+                p.id,
+                resolveImage(pAny.image_url, pAny.imageUrl, pAny.image, service?.image_url, (service as any)?.imageUrl, service?.gallery?.[0], pAny.gallery?.[0], pAny.items?.[0]?.service?.imageUrl, pAny.items?.[0]?.service?.image_url),
+              ];
+            })
+          );
+        } catch (error) {
+          console.error("Failed to load images for booking:", error);
+        }
+
+        const list = rows.flatMap((row) => {
+          try {
+            return [mapMyBookingToBooking(row, imageByPackageId)];
+          } catch (err) {
+            console.warn("[booking] skipped a booking that couldn't be read", row, err);
+            return [];
+          }
+        });
+        let wanted = checkoutId;
+        try {
+          wanted = decodeURIComponent(checkoutId);
+        } catch {
+        }
+        wanted = wanted.trim().toUpperCase();
         const found = list.find(
-          (b) => b.id === checkoutId || b.id.toUpperCase() === checkoutId.toUpperCase()
+          (b) => b.id.toUpperCase() === wanted || b.bookingId?.toUpperCase() === wanted
         );
-        const resolved = found ?? getBookingById(checkoutId.toUpperCase()) ?? STATIC_BOOKINGS[0];
-        setBooking(resolved);
-        setPayments(resolved.payments);
-        setStatus(resolved.status);
-        setPaymentStatus(resolved.paymentStatus);
-        setRefund(resolved.refund);
+        if (!found) {
+          console.warn(
+            "[booking] no match for",
+            wanted,
+            "available:",
+            list.map((b) => ({ id: b.id, bookingId: b.bookingId })),
+          );
+        }
+        if (!found) {
+          setNotFound(true);
+          return;
+        }
+        const current = (await syncBookingsWithCore([found]))[0] ?? found;
+        setBooking(current);
+        setPayments(current.payments);
+        setStatus(current.status);
+        setPaymentStatus(current.paymentStatus);
+        setRefund(current.refund);
       })
-      .catch(() => {
-        const fallback = getBookingById(checkoutId.toUpperCase()) ?? STATIC_BOOKINGS[0];
-        setBooking(fallback);
-        setPayments(fallback.payments);
-        setStatus(fallback.status);
-        setPaymentStatus(fallback.paymentStatus);
-        setRefund(fallback.refund);
+      .catch((err) => {
+        console.error("[booking] failed to load bookings", err);
+        setLoadError(err instanceof Error ? err.message : "Something went wrong while loading your booking.");
       })
       .finally(() => setBookingLoading(false));
   }, [authLoading, user, checkoutId]);
 
-  if (authLoading || !user || bookingLoading || !booking) {
+  if (authLoading || !user || bookingLoading) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-20 text-center text-gray-500">
         Loading your booking...
@@ -105,9 +155,53 @@ export default function BookingDetailsPage() {
     );
   }
 
+  if (loadError) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-20 text-center">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Couldn&apos;t load your booking</h2>
+        <p className="text-gray-500 mb-1">{loadError}</p>
+        <p className="text-gray-400 text-sm mb-6">Please check your connection and try again.</p>
+        <div className="flex items-center justify-center gap-3">
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-orange-500 text-white px-6 py-3 rounded-full font-semibold hover:bg-orange-600"
+          >
+            Try again
+          </button>
+          <button
+            onClick={() => router.push("/bookings")}
+            className="border border-gray-200 text-gray-700 px-6 py-3 rounded-full font-semibold hover:border-orange-300"
+          >
+            My Bookings
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (notFound || !booking) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-20 text-center">
+        <div className="text-5xl mb-4">🔍</div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Booking not found</h2>
+        <p className="text-gray-500 mb-6">We couldn&apos;t find a booking with this ID on your account.</p>
+        <button
+          onClick={() => router.push("/bookings")}
+          className="bg-orange-500 text-white px-6 py-3 rounded-full font-semibold hover:bg-orange-600"
+        >
+          Back to My Bookings
+        </button>
+      </div>
+    );
+  }
+
   const totalAmount = booking.totalAmount;
-  const paid = payments.reduce((sum, p) => sum + p.amount, 0);
-  const remaining = Math.max(totalAmount - paid, 0);
+  const paidFromTransactions = payments.reduce((sum, p) => sum + p.amount, 0);
+  const remaining =
+    typeof booking.remainingDueAmount === "number"
+      ? Math.max(booking.remainingDueAmount, 0)
+      : Math.max(totalAmount - paidFromTransactions, 0);
+  const paid = Math.max(totalAmount - remaining, 0);
   const percentPaid =
     totalAmount > 0 ? Math.round((paid / totalAmount) * 100) : 0;
   const isFullyPaid = remaining === 0;
@@ -127,9 +221,12 @@ export default function BookingDetailsPage() {
         label: prev.length === 0 ? "Full Payment" : "Final Payment",
         amount: remaining,
         status: "SUCCEEDED",
-        date: "04 Sep 2026, 11:15 AM",
+        date: new Date().toLocaleString(),
       },
     ]);
+    setBooking((prev) =>
+      prev ? { ...prev, remainingDueAmount: 0, paymentStatus: "FULLY_PAID" } : prev,
+    );
     setStatus("CONFIRMED");
     setPaymentStatus("FULLY_PAID");
     setStep("success");
@@ -141,28 +238,49 @@ export default function BookingDetailsPage() {
     setStep("failed");
   };
 
-  const handleConfirmCancel = () => {
+  const handleConfirmCancel = async () => {
     setCancelling(true);
-    setTimeout(() => {
-      setCancelling(false);
+    setCancelError(null);
+    try {
+      const result = await customerApi.bookings.cancel(booking.bookingId, refundReason);
       setStatus("CANCELLED");
+      if (result?.refund) {
+        setRefund({
+          amount: result.refund.amount,
+          reason: refundReason,
+          date: new Date().toLocaleString(),
+          referenceId: result.refund.referenceId ?? `REFUND_${booking.bookingId}`,
+        });
+        setPaymentStatus("REFUNDED");
+      }
       setStep("cancelled");
-    }, 900);
+    } catch (error) {
+      setCancelError(error instanceof Error ? error.message : "Failed to cancel booking.");
+    } finally {
+      setCancelling(false);
+    }
   };
-
-  const handleConfirmRefund = () => {
+  const handleConfirmRefund = async () => {
     setRefunding(true);
-    setTimeout(() => {
-      setRefunding(false);
+    setCancelError(null);
+    try {
+      const estimate = await customerApi.bookings.refundEstimate(booking.bookingId);
+      const result = await customerApi.bookings.cancel(booking.bookingId, refundReason);
+      const refundAmount = result?.refund?.amount ?? estimate?.refundAmount ?? paid;
       setRefund({
-        amount: paid,
+        amount: refundAmount,
         reason: refundReason,
-        date: "04 Sep 2026, 12:05 PM",
-        referenceId: `REFUND_${booking.id.replace("CHECKOUT_ID_", "")}`,
+        date: new Date().toLocaleString(),
+        referenceId: result?.refund?.referenceId ?? `REFUND_${booking.bookingId}`,
       });
+      setStatus("CANCELLED");
       setPaymentStatus("REFUNDED");
       setStep("refunded");
-    }, 1100);
+    } catch (error) {
+      setCancelError(error instanceof Error ? error.message : "Failed to process refund.");
+    } finally {
+      setRefunding(false);
+    }
   };
 
   return (
@@ -193,8 +311,6 @@ export default function BookingDetailsPage() {
           totalAmount={totalAmount}
           paid={paid}
           remaining={remaining}
-          method={method}
-          setMethod={setMethod}
           onBack={() => setStep("details")}
           onPay={handlePayNow}
         />
@@ -202,6 +318,8 @@ export default function BookingDetailsPage() {
 
       {step === "gateway" && (
         <GatewayScreen
+          bookingId={booking.bookingId}
+          bookingIds={booking.bookingIdCandidates}
           amount={remaining}
           currency={currency}
           onSuccess={handleGatewaySuccess}
@@ -223,7 +341,7 @@ export default function BookingDetailsPage() {
         <>
           <Confetti trigger={confettiTrigger} />
           <SuccessScreen
-            checkoutId={booking.id}
+            checkoutId={booking.bookingId}
             currency={currency}
             totalAmount={totalAmount}
             previousPaid={previousPaid}
@@ -236,7 +354,7 @@ export default function BookingDetailsPage() {
 
       {step === "history" && (
         <HistoryScreen
-          checkoutId={booking.id}
+          checkoutId={booking.bookingId}
           currency={currency}
           totalAmount={totalAmount}
           paid={paid}
@@ -245,7 +363,7 @@ export default function BookingDetailsPage() {
           payments={payments}
           refund={refund}
           items={booking.items}
-          eventAddress={booking.eventAddress}
+          eventAddress={formatAddressById(booking.eventAddress, user?.addresses, new Map(uaeCities.map((c) => [c.id, c.name])))}
           bookingDate={booking.bookingDate}
           onBack={() => setStep("details")}
         />
@@ -253,18 +371,19 @@ export default function BookingDetailsPage() {
 
       {step === "cancel" && (
         <CancelScreen
-          checkoutId={booking.id}
+          checkoutId={booking.bookingId}
           currency={currency}
           paid={paid}
           cancelling={cancelling}
           onConfirm={handleConfirmCancel}
           onBack={() => setStep("details")}
+          errorMessage={cancelError}
         />
       )}
 
       {step === "cancelled" && (
         <CancelledScreen
-          checkoutId={booking.id}
+          checkoutId={booking.bookingId}
           currency={currency}
           paid={paid}
           onBack={() => setStep("details")}
@@ -273,7 +392,7 @@ export default function BookingDetailsPage() {
 
       {step === "refund" && (
         <RefundScreen
-          checkoutId={booking.id}
+          checkoutId={booking.bookingId}
           currency={currency}
           paid={paid}
           reason={refundReason}
@@ -281,12 +400,13 @@ export default function BookingDetailsPage() {
           refunding={refunding}
           onConfirm={handleConfirmRefund}
           onBack={() => setStep("details")}
+          errorMessage={cancelError}
         />
       )}
 
       {step === "refunded" && refund && (
         <RefundedScreen
-          checkoutId={booking.id}
+          checkoutId={booking.bookingId}
           currency={currency}
           refund={refund}
           onBack={() => setStep("details")}

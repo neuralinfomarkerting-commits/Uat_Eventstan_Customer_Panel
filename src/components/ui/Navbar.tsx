@@ -119,8 +119,12 @@ export default function Navbar() {
                       onClick={() => setUserDropOpen(o => !o)}
                       className="flex items-center gap-2 bg-gray-50 border border-gray-200 hover:border-orange-300 hover:bg-orange-50 rounded-full pl-1 pr-3 py-1 transition-all group"
                     >
-                      <div className={`w-8 h-8 ${avatarColor} rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
-                        {user.avatar}
+                      <div className={`w-8 h-8 ${avatarColor} rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 overflow-hidden`}>
+                        {user.profileImage ? (
+                          <img src={user.profileImage} alt={user.name} className="w-8 h-8 rounded-full object-cover" />
+                        ) : (
+                          user.avatar
+                        )}
                       </div>
                       <div className="text-left hidden lg:block">
                         <p className="text-xs font-bold text-gray-900 leading-none group-hover:text-orange-600 transition-colors">
@@ -136,8 +140,12 @@ export default function Navbar() {
                     {userDropOpen && (
                       <div className="absolute right-0 top-12 w-56 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden">
                         <div className="px-4 py-3 bg-gradient-to-r from-orange-50 to-white border-b border-gray-100 flex items-center gap-3">
-                          <div className={`w-10 h-10 ${avatarColor} rounded-xl flex items-center justify-center text-white text-sm font-bold flex-shrink-0`}>
-                            {user.avatar}
+                          <div className={`w-10 h-10 ${avatarColor} rounded-xl flex items-center justify-center text-white text-sm font-bold flex-shrink-0 overflow-hidden`}>
+                            {user.profileImage ? (
+                              <img src={user.profileImage} alt={user.name} className="w-10 h-10 rounded-xl object-cover" />
+                            ) : (
+                              user.avatar
+                            )}
                           </div>
                           <div className="min-w-0">
                             <p className="font-bold text-sm text-gray-900 truncate">{user.name}</p>
@@ -211,8 +219,12 @@ export default function Navbar() {
 
             {user && (
               <div className="mx-4 mb-4 bg-orange-50 border border-orange-100 rounded-2xl px-4 py-3 flex items-center gap-3">
-                <div className={`w-10 h-10 ${avatarColor} rounded-xl flex items-center justify-center text-white font-bold text-sm`}>
-                  {user.avatar}
+                <div className={`w-10 h-10 ${avatarColor} rounded-xl flex items-center justify-center text-white font-bold text-sm overflow-hidden`}>
+                  {user.profileImage ? (
+                    <img src={user.profileImage} alt={user.name} className="w-10 h-10 rounded-xl object-cover" />
+                  ) : (
+                    user.avatar
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="font-bold text-gray-900 text-sm truncate">{user.name}</p>

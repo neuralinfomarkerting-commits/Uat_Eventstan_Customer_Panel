@@ -49,13 +49,22 @@ export default function PromotionsPage() {
       }, {}),
     [services],
   );
+  const imageByServiceId = useMemo(
+    () =>
+      services.reduce<Record<string, string>>((acc, s) => {
+        const img = s.image_url || (s as any).imageUrl;
+        if (s.id && img) acc[s.id] = img;
+        return acc;
+      }, {}),
+    [services],
+  );
 
   const PROMOTIONS: Promotion[] = useMemo(
     () =>
       (packages as RawApiPackage[])
         .filter(isPromotionalPackage)
-        .map((pkg) => packageToPromotion(pkg, categoryByServiceId)),
-    [packages, categoryByServiceId],
+        .map((pkg) => packageToPromotion(pkg, categoryByServiceId, imageByServiceId)),
+    [packages, categoryByServiceId, imageByServiceId],
   );
 
   const filtered = useMemo(() => {
@@ -200,6 +209,7 @@ export default function PromotionsPage() {
               description: booking.short_desc,
               price: booking.price,
               price_unit: booking.price_unit,
+              image_url: booking.image_url,
               isPromotion: true,
               inclusions: booking.inclusions,
               max_guests: booking.max_guests,
@@ -221,6 +231,7 @@ export default function PromotionsPage() {
               vendor_name: booking.vendor_name,
               vendor_email: booking.vendor_email,
               vendor_phone: booking.vendor_phone,
+              image_url: booking.image_url,
             } as any
           }
           onClose={() => setBooking(null)}
