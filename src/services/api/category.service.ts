@@ -1,4 +1,3 @@
-// services/api/category.service.ts
 
 export interface Category {
   id: string;
@@ -15,15 +14,11 @@ export interface CategoryWithMetadata extends Category {
   img: string;
 }
 
-// Same client/server split pattern used in customerApi.ts —
-// client-side calls go through the Next.js proxy to avoid CORS,
-// server-side calls hit the real API directly.
 const isServer = typeof window === "undefined";
 const API_BASE_URL = isServer
-  ? `${process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, "") ?? "https://api.eventstan.com"}/api/v1`
+  ? `${process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, "")}/api/v1`
   : "/api/proxy";
 
-// Static metadata for categories
 const CATEGORY_METADATA: Record<string, { desc: string; icon: string; img: string }> = {
   Venue: {
     desc: "Halls, gardens, resorts & unique spaces",
@@ -56,9 +51,6 @@ const CATEGORY_METADATA: Record<string, { desc: string; icon: string; img: strin
     img: "/images/categories/corporate-events.jpg",
   },
 };
-
-// Fallback metadata for any category the API returns that isn't in
-// CATEGORY_METADATA above, so new categories don't silently disappear.
 const DEFAULT_METADATA = {
   desc: "Top-rated vendors for your event",
   icon: "✨",
@@ -80,9 +72,6 @@ export class CategoryService {
     return CategoryService.instance;
   }
 
-  /**
-   * Fetch all categories from API
-   */
   async fetchCategories(): Promise<Category[]> {
     try {
       const response = await fetch(`${this.baseUrl}/master-data/categories`, {
@@ -102,9 +91,6 @@ export class CategoryService {
     }
   }
 
-  /**
-   * Fetch categories and merge with metadata
-   */
   async fetchCategoriesWithMetadata(): Promise<CategoryWithMetadata[]> {
     try {
       const categories = await this.fetchCategories();
@@ -121,9 +107,6 @@ export class CategoryService {
     }
   }
 
-  /**
-   * Get static categories as fallback
-   */
   getStaticCategories(): CategoryWithMetadata[] {
     return Object.entries(CATEGORY_METADATA).map(([name, metadata]) => ({
       id: `static-${name.toLowerCase().replace(/\s+/g, "-")}`,
@@ -136,22 +119,15 @@ export class CategoryService {
     }));
   }
 
-  /**
-   * Get category by name
-   */
   async getCategoryByName(name: string): Promise<CategoryWithMetadata | null> {
     const categories = await this.fetchCategoriesWithMetadata();
     return categories.find((cat) => cat.name.toLowerCase() === name.toLowerCase()) || null;
   }
 
-  /**
-   * Get category by slug
-   */
   async getCategoryBySlug(slug: string): Promise<CategoryWithMetadata | null> {
     const categories = await this.fetchCategoriesWithMetadata();
     return categories.find((cat) => cat.slug.toLowerCase() === slug.toLowerCase()) || null;
   }
 }
 
-// Export singleton instance
 export const categoryService = CategoryService.getInstance();

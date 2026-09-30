@@ -1,13 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, Search, X, Calendar } from "lucide-react";
+import { useState, useRef } from "react";
+import { Camera, ChevronDown, Search, X, Calendar } from "lucide-react";
 import type { Country } from "@/api/customerApi";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 
 interface PersonalInfoTabProps {
   user: { name: string; avatar: string };
   avatarColor: string;
+  profileImage?: string | null;
+  uploadingPhoto?: boolean;
+  onPhotoSelect?: (file: File) => void;
   firstName: string;
   lastName: string;
   email: string;
@@ -240,24 +243,70 @@ function DobDatePicker({ value, onChange }: DobDatePickerProps) {
 }
 
 export default function PersonalInfoTab({
-  user, avatarColor, firstName, lastName, email, phone, gender, dob, saving,
+  user, avatarColor, profileImage, uploadingPhoto, onPhotoSelect,
+  firstName, lastName, email, phone, gender, dob, saving,
   countryCode, countries,
   onFirstNameChange, onLastNameChange, onPhoneChange, onCountryCodeChange, onGenderChange, onDobChange, onSubmit,
 }: PersonalInfoTabProps) {
   const [codeOpen, setCodeOpen] = useState(false);
   const [codeSearch, setCodeSearch] = useState("");
   const [phoneFocused, setPhoneFocused] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filteredCountries = countries.filter((c) => {
     const q = codeSearch.toLowerCase();
     return c.name.toLowerCase().includes(q) || c.phoneCode.toLowerCase().includes(q) || c.code.toLowerCase().includes(q);
   });
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && onPhotoSelect) onPhotoSelect(file);
+    e.target.value = "";
+  };
+
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
       <div className="px-4 sm:px-8 py-5 border-b border-gray-100 flex items-center gap-3">
-        <div className={`w-10 h-10 sm:w-12 sm:h-12 ${avatarColor} rounded-full flex items-center justify-center text-white font-bold flex-shrink-0`}>
-          {user.avatar}
+        <div className="relative flex-shrink-0">
+          {profileImage ? (
+            <img
+              src={profileImage}
+              alt={user.name}
+              className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover border border-gray-100"
+            />
+          ) : (
+            <div className={`w-10 h-10 sm:w-12 sm:h-12 ${avatarColor} rounded-full flex items-center justify-center text-white font-bold`}>
+              {user.avatar}
+            </div>
+          )}
+
+          {onPhotoSelect && (
+            <>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingPhoto}
+                title="Change photo"
+                className="absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-orange-500 hover:bg-orange-600 text-white flex items-center justify-center border-2 border-white shadow-sm disabled:opacity-60"
+              >
+                {uploadingPhoto ? (
+                  <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : (
+                  <Camera className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                )}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+            </>
+          )}
         </div>
         <div>
           <p className="text-gray-500 text-xs sm:text-sm">Hello, {firstName}</p>

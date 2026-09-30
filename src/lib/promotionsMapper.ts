@@ -53,6 +53,7 @@ export function isPromotionalPackage(pkg: RawApiPackage): boolean {
 export function packageToPromotion(
   pkg: RawApiPackage,
   categoryByServiceId?: Record<string, string>,
+  imageByServiceId?: Record<string, string>,
 ): Promotion {
   const svc = pkg.items?.[0]?.service;
   const embeddedCategory =
@@ -73,7 +74,13 @@ export function packageToPromotion(
     vendor_name: svc?.vendor_name || "",
     vendor_handle: svc?.title || "",
     category,
-    image_url: pkg.imageUrl || pkg.image_url || svc?.imageUrl || "",
+    image_url:
+      pkg.imageUrl ||
+      pkg.image_url ||
+      (serviceId && imageByServiceId?.[serviceId]) ||
+      svc?.imageUrl ||
+      (svc as any)?.image_url ||
+      "",
     description: pkg.description,
     short_desc: pkg.description,
     price,

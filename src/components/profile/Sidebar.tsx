@@ -3,7 +3,7 @@
 import { Tab } from "./types";
 
 interface SidebarProps {
-  user: { name: string; email: string; avatar: string };
+  user: { name: string; email: string; avatar: string; profileImage?: string | null };
   avatarColor: string;
   tab: Tab;
   onTabChange: (tab: Tab) => void;
@@ -36,9 +36,17 @@ export default function Sidebar({ user, avatarColor, tab, onTabChange, onLogoutC
   return (
     <>
       <div className="flex flex-col items-center py-6 px-4 border-b border-gray-100">
-        <div className={`w-16 h-16 ${avatarColor} rounded-full flex items-center justify-center text-white text-xl font-bold mb-3`}>
-          {user.avatar}
-        </div>
+        {user.profileImage ? (
+          <img
+            src={user.profileImage}
+            alt={user.name}
+            className="w-16 h-16 rounded-full object-cover border border-gray-100 mb-3"
+          />
+        ) : (
+          <div className={`w-16 h-16 ${avatarColor} rounded-full flex items-center justify-center text-white text-xl font-bold mb-3`}>
+            {user.avatar}
+          </div>
+        )}
         <p className="font-bold text-gray-900 text-sm text-center truncate w-full">{user.name}</p>
         <p className="text-xs text-gray-400 truncate w-full text-center">{user.email}</p>
       </div>

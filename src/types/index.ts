@@ -12,6 +12,7 @@ export interface Service {
   rating: number;
   review_count: number;
   image_url: string;
+  imageUrl?: string;
   vendor_name: string;
   vendor_email: string;
   vendor_phone: string;
@@ -33,7 +34,6 @@ export interface Package {
   max_guests: number;
   duration_hours: number;
   is_popular?: boolean;
-  // Rental-specific fields (present on rental packages from the /packages API).
   is_rental?: boolean;
   isRental?: boolean;
   min_days?: number;
@@ -48,6 +48,12 @@ export interface Package {
   deliveryFee?: number;
   rental_location?: string;
   rentalLocation?: string;
+  items?: Array<{
+    service?: {
+      imageUrl?: string;
+      image_url?: string;
+    };
+  }>;
 }
 
 export interface Booking {
@@ -89,13 +95,9 @@ export interface CartItem {
   service?: Service;
   cartItemId?: string;
   quantity?: number;
-  /** For rental-style packages: number of units rented (e.g. 5 chairs). */
   unitQuantity?: number;
-  /** For rental-style packages: number of days the units are rented for. */
   days?: number;
-  /** For rental-style packages with delivery: drop-off address. */
   deliveryLocation?: string;
-  /** For rental-style packages with delivery: computed transport fee, added on top of the item price. */
   transportFee?: number;
 }
 
@@ -125,7 +127,6 @@ export interface Promotion {
   expires_at?: string;
   original_price?: number;
   service_id: string;
-  // Rental-specific fields (present on rental packages from the /packages API).
   is_rental?: boolean;
   delivery_available?: boolean;
   delivery_fee?: number;

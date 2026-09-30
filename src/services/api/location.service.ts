@@ -1,12 +1,4 @@
-// services/api/location.service.ts
-//
-// Fetches states/cities from the real master-data API:
-//   GET /master-data/states?countryId=<id>
-//   GET /master-data/cities?countryId=<id>&stateId=<id>
-//
-// Same client/server split + rewrite-proxy pattern used by category.service.ts:
-// client-side calls go through /api/proxy (see next.config.ts rewrites) to
-// avoid CORS, server-side calls hit the real API directly.
+
 
 export interface State {
   id: string;
@@ -29,16 +21,13 @@ export interface City {
   updatedAt?: string;
 }
 
-// UAE's country id in the master-data service.
 export const UAE_COUNTRY_ID = 1;
 
 const isServer = typeof window === "undefined";
 const API_BASE_URL = isServer
-  ? `${process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, "") ?? "https://api.eventstan.com"}/api/v1`
+  ? `${process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, "")}/api/v1`
   : "/api/proxy";
 
-// Some master-data endpoints return a bare array, others wrap the payload in
-// { data: [...] } — handle both so this doesn't silently break either way.
 function unwrapList<T>(payload: unknown): T[] {
   if (Array.isArray(payload)) return payload as T[];
   if (payload && typeof payload === "object" && Array.isArray((payload as { data?: unknown }).data)) {
@@ -62,9 +51,6 @@ export class LocationService {
     return LocationService.instance;
   }
 
-  /**
-   * Fetch all states/emirates for a given country (defaults to UAE).
-   */
   async fetchStates(countryId: number = UAE_COUNTRY_ID): Promise<State[]> {
     try {
       const response = await fetch(`${this.baseUrl}/master-data/states?countryId=${countryId}`, {
@@ -83,9 +69,7 @@ export class LocationService {
     }
   }
 
-  /**
-   * Fetch all cities for a given state (and its country).
-   */
+  
   async fetchCities(stateId: string, countryId: number = UAE_COUNTRY_ID): Promise<City[]> {
     try {
       const response = await fetch(
@@ -105,6 +89,4 @@ export class LocationService {
     }
   }
 }
-
-// Export singleton instance
 export const locationService = LocationService.getInstance();

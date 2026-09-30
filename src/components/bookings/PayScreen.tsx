@@ -1,10 +1,8 @@
 import Link from "next/link";
-import { ArrowLeft, Lock, ShieldCheck } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ImageOff, Lock, ShieldCheck } from "lucide-react";
 import CurrencySymbol from "@/components/ui/CurrencySymbol";
 import { type Booking } from "@/lib/mockBookings";
 import Money from "./Money";
-
-type PaymentMethod = "card" | "apple" | "google" | "other";
 
 export default function PayScreen({
   booking,
@@ -12,8 +10,6 @@ export default function PayScreen({
   totalAmount,
   paid,
   remaining,
-  method,
-  setMethod,
   onBack,
   onPay,
 }: {
@@ -22,14 +18,18 @@ export default function PayScreen({
   totalAmount: number;
   paid: number;
   remaining: number;
-  method: PaymentMethod;
-  setMethod: (m: PaymentMethod) => void;
   onBack: () => void;
   onPay: () => void;
 }) {
+  const paidPercent =
+    totalAmount > 0 ? Math.min(100, Math.max(0, Math.round((paid / totalAmount) * 100))) : 0;
+
+  const payButtonClass =
+    "w-full flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white py-3.5 rounded-xl font-semibold text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2";
+
   return (
-    <div>
-      <div className="flex items-center justify-between mb-1">
+    <div className="pb-24 lg:pb-0">
+      <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs text-gray-400 mb-1">
             <Link href="/bookings" className="hover:text-orange-500">
@@ -46,7 +46,7 @@ export default function PayScreen({
             Complete Your Payment
           </h1>
           <p className="text-gray-500 text-sm mt-1">
-            Review the amount due and choose how you&apos;d like to pay.
+            Review the amount due. You can choose your payment method securely on the next step.
           </p>
         </div>
         <button
@@ -57,148 +57,132 @@ export default function PayScreen({
         </button>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-5 mt-6">
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
-          <p className="font-mono font-bold text-gray-900 mb-4">{booking.id}</p>
-
-          <div className="flex items-center justify-between text-xs text-gray-400 font-semibold uppercase tracking-wide border-b border-gray-100 pb-2 mb-2">
-            <span>Packages</span>
-            <span>Amount ({currency})</span>
-          </div>
-          <div className="space-y-2 mb-4">
-            {booking.items.map((pkg) => (
-              <div
-                key={pkg.bookingId}
-                className="flex items-center justify-between text-sm"
-              >
-                <span className="text-gray-700">{pkg.title}</span>
-                <span className="font-medium text-gray-900">
-                  <Money value={pkg.amount} currency={currency} />
-                </span>
-              </div>
-            ))}
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_360px] gap-5 mt-6 items-start">
+        {/* Amount due: first on mobile, sticky on the right on desktop */}
+        <aside className="order-first lg:order-none lg:col-start-2 lg:row-start-1 lg:sticky lg:top-24 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="p-5 sm:p-6 bg-orange-50/70 border-b border-orange-100">
+            <p className="text-sm text-gray-600">Amount due now</p>
+            <p className="flex items-baseline gap-2 mt-1 font-bold text-orange-500 whitespace-nowrap tabular-nums">
+              <CurrencySymbol currency={currency} className="text-xl leading-none flex-shrink-0" />
+              <span className="text-4xl sm:text-5xl leading-none">{remaining.toLocaleString()}</span>
+            </p>
+            <p className="text-xs text-gray-500 mt-2">
+              This clears your booking balance in full.
+            </p>
           </div>
 
-          <div className="flex items-center justify-between text-sm font-bold border-t border-gray-100 pt-3 mb-4">
-            <span className="text-gray-900">Total Amount</span>
-            <Money value={totalAmount} currency={currency} />
-          </div>
-
-          <div className="bg-orange-50 rounded-xl p-4 space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-500">Already Paid</span>
-              <span className="font-semibold text-gray-900 flex items-center gap-1">
-                <span>-</span>
-                <Money value={paid} currency={currency} />
+          <div className="p-5 sm:p-6">
+            <button onClick={onPay} className={`${payButtonClass} hidden lg:flex`}>
+              <Lock className="w-4 h-4" />
+              <span>Pay</span>
+              <Money value={remaining} currency={currency} />
+            </button>
+            <p className="flex items-start gap-2 text-xs text-gray-500 lg:mt-4 leading-relaxed">
+              <ShieldCheck className="w-4 h-4 text-green-600 flex-shrink-0 mt-px" />
+              <span>
+                Payments are processed securely by Stripe. You&apos;ll pick how to pay on the next screen, and
+                your card details never touch our servers.
               </span>
-            </div>
-            <div className="flex items-center justify-between text-sm font-bold">
-              <span className="text-gray-900">Remaining Amount</span>
-              <Money
-                value={remaining}
-                currency={currency}
-                className="text-orange-500"
-              />
-            </div>
-          </div>
-
-          <div className="mt-5">
-            <p className="text-sm text-gray-500 mb-1">Amount to Pay</p>
-            <p className="flex items-baseline gap-1.5 text-3xl font-bold text-orange-500 whitespace-nowrap">
-              <CurrencySymbol
-                currency={currency}
-                className="text-xl leading-none flex-shrink-0"
-              />
-              <span>{remaining.toLocaleString()}</span>
-            </p>
-            <p className="text-xs text-gray-400 mt-1">
-              This is the remaining amount to be paid.
             </p>
           </div>
-        </div>
+        </aside>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6 h-fit">
-          <h3 className="text-sm font-bold text-gray-900 mb-4">
-            Choose Payment Method
-          </h3>
-          <div className="space-y-2.5">
-            <PaymentMethodOption
-              label="Card"
-              badge="VISA · Mastercard · AMEX"
-              selected={method === "card"}
-              onSelect={() => setMethod("card")}
-            />
-            <PaymentMethodOption
-              label="Apple Pay"
-              badge="Pay"
-              selected={method === "apple"}
-              onSelect={() => setMethod("apple")}
-            />
-            <PaymentMethodOption
-              label="Google Pay"
-              badge="G Pay"
-              selected={method === "google"}
-              onSelect={() => setMethod("google")}
-            />
-            <PaymentMethodOption
-              label="Other UPI / Wallet"
-              selected={method === "other"}
-              onSelect={() => setMethod("other")}
-            />
+        {/* Order summary */}
+        <section className="lg:col-start-1 lg:row-start-1 bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-5">
+            <div>
+              <p className="text-xs text-gray-400">Booking</p>
+              <p className="font-mono font-bold text-gray-900 break-all">{booking.bookingId}</p>
+            </div>
+            <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-700 text-xs font-semibold px-3 py-1">
+              Payment pending
+            </span>
           </div>
 
-          <button
-            onClick={onPay}
-            className="w-full mt-5 flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-semibold text-sm transition-colors"
-          >
-            <Lock className="w-4 h-4" />
-            <span>Pay</span>
-            <Money value={remaining} currency={currency} />
-          </button>
-          <p className="flex items-center justify-center gap-1 text-xs text-gray-400 mt-2.5">
-            <ShieldCheck className="w-3.5 h-3.5" /> 100% Secure Payment via
-            Stripe
-          </p>
-        </div>
+          <h2 className="text-sm font-semibold text-gray-900 mb-3">
+            What you&apos;re paying for
+          </h2>
+          <ul className="divide-y divide-gray-100 border-y border-gray-100">
+            {booking.items.map((pkg) => (
+              <li key={pkg.bookingId} className="flex items-center gap-3.5 py-3.5">
+                <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-50 border border-gray-100 flex-shrink-0 flex items-center justify-center">
+                  {pkg.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={pkg.image} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <ImageOff className="w-5 h-5 text-gray-300" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-gray-900 truncate">{pkg.title}</p>
+                  <p className="text-xs text-gray-400 truncate">
+                    {pkg.vendor}
+                    {pkg.quantity > 1 ? ` (x${pkg.quantity})` : ""}
+                  </p>
+                </div>
+                <Money
+                  value={pkg.amount}
+                  currency={currency}
+                  className="text-sm font-semibold text-gray-900 tabular-nums"
+                />
+              </li>
+            ))}
+          </ul>
+
+          <dl className="mt-4 space-y-2.5 text-sm">
+            <div className="flex items-center justify-between">
+              <dt className="text-gray-500">Total amount</dt>
+              <dd className="font-semibold text-gray-900 tabular-nums">
+                <Money value={totalAmount} currency={currency} />
+              </dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt className="flex items-center gap-1.5 text-gray-500">
+                <CheckCircle2 className="w-4 h-4 text-green-600" />
+                Already paid
+              </dt>
+              <dd className="font-semibold text-green-600 tabular-nums">
+                <Money value={paid} currency={currency} />
+              </dd>
+            </div>
+          </dl>
+
+          <div className="mt-4">
+            <div
+              className="h-2 rounded-full bg-gray-100 overflow-hidden"
+              role="progressbar"
+              aria-valuenow={paidPercent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Portion of the total already paid"
+            >
+              <div
+                className="h-full rounded-full bg-green-500 transition-[width] duration-500"
+                style={{ width: `${paidPercent}%` }}
+              />
+            </div>
+            <p className="text-xs text-gray-400 mt-1.5">{paidPercent}% paid</p>
+          </div>
+
+          <div className="flex items-center justify-between mt-5 pt-4 border-t border-gray-100">
+            <span className="text-sm font-bold text-gray-900">Remaining amount</span>
+            <Money
+              value={remaining}
+              currency={currency}
+              className="text-lg font-bold text-orange-500 tabular-nums"
+            />
+          </div>
+        </section>
+      </div>
+
+      {/* Mobile: pay bar stays reachable while scrolling */}
+      <div className="lg:hidden fixed inset-x-0 bottom-0 z-30 bg-white/95 backdrop-blur border-t border-gray-100 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <button onClick={onPay} className={payButtonClass}>
+          <Lock className="w-4 h-4" />
+          <span>Pay</span>
+          <Money value={remaining} currency={currency} />
+        </button>
       </div>
     </div>
-  );
-}
-
-function PaymentMethodOption({
-  label,
-  badge,
-  selected,
-  onSelect,
-}: {
-  label: string;
-  badge?: string;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={`w-full flex items-center justify-between rounded-xl border px-3.5 py-3 text-sm transition-colors ${
-        selected
-          ? "border-orange-400 bg-orange-50"
-          : "border-gray-200 hover:border-gray-300"
-      }`}
-    >
-      <span className="flex items-center gap-2.5">
-        <span
-          className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
-            selected ? "border-orange-500" : "border-gray-300"
-          }`}
-        >
-          {selected && <span className="w-2 h-2 rounded-full bg-orange-500" />}
-        </span>
-        <span className="font-medium text-gray-800">{label}</span>
-      </span>
-      {badge && (
-        <span className="text-[10px] text-gray-400 flex-shrink-0">{badge}</span>
-      )}
-    </button>
   );
 }

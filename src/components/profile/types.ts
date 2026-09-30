@@ -6,10 +6,13 @@ export interface Address {
   addressLine2: string;
   landmark: string;
   poBoxNumber: string;
-  // Emirate (currently always "Dubai" — the platform only serves Dubai for now).
+  
   state: string;
-  // Area/community within the state, chosen from a searchable dropdown.
+  
   city: string;
+  
+  stateId: string;
+  cityId: string;
   isDefault: boolean;
 }
 
@@ -22,11 +25,14 @@ export const emptyAddressForm: AddressFormData = {
   poBoxNumber: "",
   state: "Dubai",
   city: "",
+  stateId: "",
+  cityId: "",
   isDefault: false,
 };
 
 export interface ApiBooking {
   id: string;
+  bookingId: string;
   status: string;
   paymentStatus?: string;
   eventAddress: string;
@@ -38,7 +44,6 @@ export interface ApiBooking {
   payments: Array<{ amount: number; status: string }>;
 }
 
-// Order status — only 4 stages shown to the customer.
 export const BOOKING_STATUS_STYLES: Record<string, string> = {
   IN_PROCESS: "bg-orange-100 text-orange-700",
   CONFIRMED: "bg-green-100 text-green-700",
@@ -53,7 +58,6 @@ export const BOOKING_STATUS_LABELS: Record<string, string> = {
   CANCELLED: "Cancelled",
 };
 
-// Payment status — tracked separately from order status.
 export const PAYMENT_STATUS_STYLES: Record<string, string> = {
   PENDING: "bg-gray-100 text-gray-600",
   PARTIALLY_PAID: "bg-amber-100 text-amber-700",
@@ -70,8 +74,6 @@ export const PAYMENT_STATUS_LABELS: Record<string, string> = {
   REFUNDED: "Refunded",
 };
 
-// Maps a GET /customer/my-bookings/:userId row onto the ApiBooking shape
-// this tab renders.
 import type { MyBookingResponse } from "@/api/customerApi";
 
 const ORDER_STATUS_MAP: Record<string, string> = {
@@ -91,6 +93,7 @@ const PAYMENT_STATUS_MAP: Record<string, string> = {
 export function mapMyBookingToApiBooking(row: MyBookingResponse): ApiBooking {
   return {
     id: row.checkoutId ?? row.bookingId,
+    bookingId: row.bookingId,
     status: ORDER_STATUS_MAP[row.orderStatus] ?? "IN_PROCESS",
     paymentStatus: row.payment ? PAYMENT_STATUS_MAP[row.payment.paymentStatus] ?? "PENDING" : "PENDING",
     eventAddress: row.address?.addressId ?? "-",
@@ -98,7 +101,7 @@ export function mapMyBookingToApiBooking(row: MyBookingResponse): ApiBooking {
     remainingDueAmount: row.payment?.remainingAmount ?? row.totalAmount,
     currency: row.payment?.currency ?? "AED",
     createdAt: row.createdAt,
-    items: row.checkoutItems.map((item) => ({
+    items: (row.checkoutItems ?? []).map((item) => ({
       title: item.packageName ?? item.title ?? "Package",
       eventDate: row.eventDate,
       quantity: item.quantity,
@@ -109,7 +112,6 @@ export function mapMyBookingToApiBooking(row: MyBookingResponse): ApiBooking {
   };
 }
 
-// Derive a payment status when the backend hasn't sent one yet.
 export function derivePaymentStatus(booking: ApiBooking): string {
   if (booking.paymentStatus) return booking.paymentStatus;
   const paid = booking.payments

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { customerApi } from "@/api/customerApi";
+import { customerApi, getPackages, getServices } from "@/api/customerApi";
 import { useAuth } from "@/lib/AuthContext";
 import { ChevronRight, ImageOff } from "lucide-react";
 import {
@@ -13,9 +13,16 @@ import {
   STATUS_LABELS,
   PAYMENT_STATUS_STYLES,
   PAYMENT_STATUS_LABELS,
-  STATIC_BOOKINGS,
   mapMyBookingToBooking,
+  syncBookingsWithCore,
 } from "@/lib/mockBookings";
+
+function resolveImage(...candidates: Array<string | undefined | null>): string {
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate;
+  }
+  return "";
+}
 
 type FilterKey = "ALL" | BookingStatus;
 const formatDateDDMMYYYY = (value?: string) => {
@@ -31,6 +38,7 @@ export default function BookingsPage() {
   const router = useRouter();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [filter, setFilter] = useState<FilterKey>("ALL");
 
   useEffect(() => {
@@ -41,14 +49,36 @@ export default function BookingsPage() {
     }
     customerApi.bookings
       .list(user.id)
-      .then((result) => {
-        const list = Array.isArray(result)
-          ? result.map(mapMyBookingToBooking)
-          : [];
-        setBookings(list.length > 0 ? list : STATIC_BOOKINGS);
+      .then(async (result) => {
+        const rows = Array.isArray(result) ? result : [];
+
+        let imageByPackageId = new Map<string, string>();
+        try {
+          const [packages, services] = await Promise.all([getPackages(), getServices()]);
+          const serviceById = new Map(services.map((s) => [s.id, s]));
+          imageByPackageId = new Map(
+            packages.map((p) => {
+              const pAny = p as any;
+              const service = serviceById.get(p.service_id);
+              return [
+                p.id,
+                resolveImage(pAny.image_url, pAny.imageUrl, pAny.image, service?.image_url, (service as any)?.imageUrl, service?.gallery?.[0], pAny.gallery?.[0], pAny.items?.[0]?.service?.imageUrl, pAny.items?.[0]?.service?.image_url),
+              ];
+            })
+          );
+        } catch (error) {
+          console.error("Failed to load images for bookings:", error);
+        }
+
+        const list = await syncBookingsWithCore(
+          rows.map((row) => mapMyBookingToBooking(row, imageByPackageId)),
+        );
+        setBookings(list);
+        setLoadError("");
       })
-      .catch(() => {
-        setBookings(STATIC_BOOKINGS);
+      .catch((err) => {
+        setBookings([]);
+        setLoadError(err instanceof Error ? err.message : "Failed to load your bookings.");
       })
       .finally(() => setLoading(false));
   }, [authLoading, router, user]);
@@ -57,6 +87,22 @@ export default function BookingsPage() {
     return (
       <div className="max-w-4xl mx-auto px-4 py-20 text-center text-gray-500">
         Loading your bookings...
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-20 text-center">
+        <div className="text-5xl mb-4">⚠️</div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Couldn't load your bookings</h2>
+        <p className="text-gray-500 mb-6">{loadError}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="bg-orange-500 text-white px-6 py-3 rounded-full font-semibold hover:bg-orange-600"
+        >
+          Try Again
+        </button>
       </div>
     );
   }
@@ -168,9 +214,6 @@ export default function BookingsPage() {
                         +{booking.items.length - 1} more
                       </span>
                     )}
-                    <p className="text-gray-500 text-sm mb-2 truncate">
-                      {booking.eventAddress}
-                    </p>
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-semibold ${STATUS_STYLES[booking.status] ?? "bg-gray-100 text-gray-700"}`}
@@ -220,12 +263,12 @@ export default function BookingsPage() {
 
                 <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 sm:gap-4 text-xs sm:text-sm border-t border-gray-100 mt-4 pt-4">
                   <div className="min-w-0">
-                    <span className="text-gray-400 block mb-1">Booking ID</span>
+                    <span className="text-gray-400 block mb-1">Order ID</span>
                     <span
                       className="font-mono font-medium text-gray-900 truncate block"
-                      title={booking.id}
+                      title={booking.bookingId}
                     >
-                      {booking.id}
+                      {booking.bookingId}
                     </span>
                   </div>
                   <div>
@@ -237,13 +280,13 @@ export default function BookingsPage() {
                   <div>
                     <span className="text-gray-400 block mb-1">Booking Date</span>
                     <span className="font-medium text-gray-900">
-                      {formatDateDDMMYYYY(booking.bookingDate)}
+                      {formatDateDDMMYYYY(booking.createdAt)}
                     </span>
                   </div>
                   <div>
                     <span className="text-gray-400 block mb-1">Event Date</span>
                     <span className="font-medium text-gray-900">
-                      {formatDateDDMMYYYY(booking.items[0]?.eventDate)}
+                      {formatDateDDMMYYYY(booking.eventDate)}
                     </span>
                   </div>
                   <div>

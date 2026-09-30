@@ -40,9 +40,9 @@ function PackageDetailModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative h-44 flex-shrink-0">
-          {pkg.image_url || pkg.image || service.image_url ? (
+          {(pkg as any).image_url || (pkg as any).imageUrl || pkg.image || service.image_url || (service as any).imageUrl || (pkg as any).items?.[0]?.service?.imageUrl || (pkg as any).items?.[0]?.service?.image_url ? (
             <img
-              src={pkg.image_url || pkg.image || service.image_url}
+              src={(pkg as any).image_url || (pkg as any).imageUrl || pkg.image || service.image_url || (service as any).imageUrl || (pkg as any).items?.[0]?.service?.imageUrl || (pkg as any).items?.[0]?.service?.image_url}
               alt={pkg.name}
               className="w-full h-full object-cover"
             />
@@ -152,9 +152,9 @@ export default function PackageCard({ pkg, service, onBook }: Props) {
     <>
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
         <div className="relative h-48 flex-shrink-0">
-          {p.image_url || p.image || service.image_url ? (
+          {(p as any).image_url || (p as any).imageUrl || p.image || service.image_url || (service as any).imageUrl || (p as any).items?.[0]?.service?.imageUrl || (p as any).items?.[0]?.service?.image_url ? (
             <img
-              src={p.image_url || p.image || service.image_url}
+              src={(p as any).image_url || (p as any).imageUrl || p.image || service.image_url || (service as any).imageUrl || (p as any).items?.[0]?.service?.imageUrl || (p as any).items?.[0]?.service?.image_url}
               alt={p.name}
               className="w-full h-full object-cover"
             />

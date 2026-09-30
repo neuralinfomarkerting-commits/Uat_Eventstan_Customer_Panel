@@ -18,6 +18,7 @@ export default function RefundScreen({
   setReason,
   refunding,
   onConfirm,
+  errorMessage,
   onBack,
 }: {
   checkoutId: string;
@@ -27,6 +28,7 @@ export default function RefundScreen({
   setReason: (r: string) => void;
   refunding: boolean;
   onConfirm: () => void;
+  errorMessage?: string | null;
   onBack: () => void;
 }) {
   return (
@@ -96,6 +98,9 @@ export default function RefundScreen({
         ))}
       </div>
 
+      {errorMessage && (
+        <p className="text-sm text-red-600 mb-3">{errorMessage}</p>
+      )}
       <button
         onClick={onConfirm}
         disabled={refunding}

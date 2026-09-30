@@ -34,24 +34,96 @@ const WHITE: [number, number, number] = [255, 255, 255];
 async function loadImageAsDataUrl(url: string): Promise<string | null> {
   try {
     const res = await fetch(url, { mode: "cors" });
-    const blob = await res.blob();
-    return await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+    if (res.ok) {
+      const blob = await res.blob();
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }
   } catch {
-    return null;
   }
+
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    if (blob.size > 0) {
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }
+  } catch {
+  }
+
+  return null;
+}
+function toFetchableUrl(url: string): string {
+  try {
+    const abs = new URL(url, window.location.origin);
+    if (abs.origin !== window.location.origin) {
+      return `/api/image-proxy?url=${encodeURIComponent(abs.toString())}`;
+    }
+  } catch {
+  }
+  return url;
 }
 
-/**
- * Renders the "Download Receipt" button and generates a nicely styled PDF
- * receipt (via jsPDF, loaded on demand) for a booking when clicked.
- * Extracted from bookings/[id]/page.tsx's HistoryScreen so it can be
- * reused/tested on its own.
- */
+async function loadItemImageAsJpeg(url: string, size = 320): Promise<string | null> {
+  if (!url) return null;
+  if (url.startsWith("//")) url = `https:${url}`;
+  const candidates = [toFetchableUrl(url)];
+  if (candidates[0] !== url) candidates.push(url);
+  if (url.startsWith("/") && !url.startsWith("//")) {
+    const apiOrigin = (process.env.NEXT_PUBLIC_BASE_URL ?? "").replace(/\/$/, "");
+    if (apiOrigin) {
+      candidates.unshift(`/api/image-proxy?url=${encodeURIComponent(apiOrigin + url)}`);
+    }
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const res = await fetch(candidate);
+      if (!res.ok) {
+        console.warn("[receipt] image fetch failed", res.status, candidate);
+        continue;
+      }
+      const blob = await res.blob();
+      if (blob.size === 0) continue;
+      const objectUrl = URL.createObjectURL(blob);
+      try {
+        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const el = new Image();
+          el.onload = () => resolve(el);
+          el.onerror = reject;
+          el.src = objectUrl;
+        });
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) continue;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, size, size);
+        const side = Math.min(img.naturalWidth, img.naturalHeight);
+        const sx = (img.naturalWidth - side) / 2;
+        const sy = (img.naturalHeight - side) / 2;
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+        return canvas.toDataURL("image/jpeg", 0.85);
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
+    } catch (err) {
+      console.warn("[receipt] image load failed", candidate, err);
+    }
+  }
+  return null;
+}
+
 export default function DownloadReceiptButton({
   checkoutId,
   currency,
@@ -94,7 +166,6 @@ export default function DownloadReceiptButton({
         y += 8;
       };
 
-      // ---------- Header banner ----------
       const headerHeight = 32;
       doc.setFillColor(...ORANGE_LIGHT);
       doc.rect(0, 0, pageWidth, headerHeight, "F");
@@ -142,7 +213,6 @@ export default function DownloadReceiptButton({
 
       y = headerHeight + 12;
 
-      // ---------- Info card: Checkout ID / Booking Date / Event Address ----------
       const infoCardHeight = 24;
       doc.setFillColor(...GRAY_50);
       doc.setDrawColor(...BORDER);
@@ -175,7 +245,6 @@ export default function DownloadReceiptButton({
 
       y += infoCardHeight + 12;
 
-      // ---------- Packages ----------
       sectionHeading(`Packages (${items.length})`);
 
       for (const item of items) {
@@ -186,10 +255,17 @@ export default function DownloadReceiptButton({
 
         const imgSize = 18;
         const imgPad = 3;
-        const imgData = await loadImageAsDataUrl(item.image);
+        const imgData = await loadItemImageAsJpeg(item.image);
         if (imgData) {
           try {
-            doc.addImage(imgData, "JPEG", marginX + imgPad, y + imgPad, imgSize, imgSize);
+            doc.addImage(
+              imgData,
+              "JPEG",
+              marginX + imgPad,
+              y + imgPad,
+              imgSize,
+              imgSize,
+            );
           } catch {
           }
         } else {
@@ -231,7 +307,6 @@ export default function DownloadReceiptButton({
       y += 3;
       ensureSpace(50);
 
-      // ---------- Payment Summary (boxed) ----------
       sectionHeading("Payment Summary");
 
       const summaryBoxHeight = 38;
@@ -271,7 +346,6 @@ export default function DownloadReceiptButton({
 
       y += summaryBoxHeight + 12;
 
-      // ---------- Payment Transactions ----------
       ensureSpace(20);
       sectionHeading("Payment Transactions");
 
@@ -283,22 +357,36 @@ export default function DownloadReceiptButton({
         y += 8;
       } else {
         payments.forEach((p, idx) => {
-          ensureSpace(11);
-          const rowH = 10;
+          const idLines: Array<[string, string]> = [];
+          if (p.transactionId) idLines.push(["STRIPE TRANSACTION ID", p.transactionId]);
+          if (p.paymentId) idLines.push(["PAYMENT ID", p.paymentId]);
+          const rowH = 10 + idLines.length * 5;
+          ensureSpace(rowH + 1);
           doc.setFillColor(...GREEN_LIGHT);
           doc.roundedRect(marginX, y, contentWidth, rowH, 1.5, 1.5, "F");
           doc.setFont("helvetica", "bold");
           doc.setFontSize(9);
           doc.setTextColor(...GRAY_900);
-          doc.text(`${idx + 1}. ${p.label}`, marginX + 5, y + 6.5);
+          const titleText = `${idx + 1}. ${p.label}`;
+          doc.text(titleText, marginX + 5, y + 6.5);
+          const titleWidth = doc.getTextWidth(titleText);
           doc.setFont("helvetica", "normal");
           doc.setFontSize(8);
           doc.setTextColor(...GRAY_500);
-          doc.text(
-            p.date,
-            marginX + 5 + doc.getTextWidth(`${idx + 1}. ${p.label}`) + 4,
-            y + 6.5,
-          );
+          doc.text(p.date, marginX + 5 + titleWidth + 4, y + 6.5);
+          idLines.forEach(([label, value], i) => {
+            const ly = y + 11.5 + i * 5;
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(7.5);
+            doc.setTextColor(...GRAY_400);
+            doc.text(label, marginX + 5, ly);
+            doc.setFont("courier", "normal");
+            doc.setFontSize(8);
+            doc.setTextColor(...GRAY_700);
+            doc.text(value, marginX + 5 + 40, ly, {
+              maxWidth: contentWidth - 5 - 40 - 40,
+            });
+          });
           doc.setFont("helvetica", "bold");
           doc.setFontSize(9.5);
           doc.setTextColor(...GREEN);
@@ -329,7 +417,6 @@ export default function DownloadReceiptButton({
         y += refundBoxHeight + 8;
       }
 
-      // ---------- Footer on every page ----------
       const pageCount = doc.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);

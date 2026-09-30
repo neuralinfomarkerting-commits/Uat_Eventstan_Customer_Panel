@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, "") ?? "https://api.eventstan.com";
+const apiBaseUrl = process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, "");
 
 const nextConfig: NextConfig = {
   async rewrites() {

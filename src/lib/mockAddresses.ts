@@ -1,12 +1,5 @@
 import { Address } from "@/components/profile/types";
 
-// TODO(backend): replace this seed + the localStorage-backed helpers below with
-// real calls once the address_id-based endpoints exist, e.g.
-//   GET  /api/v1/customer/addresses            -> Address[]
-//   POST /api/v1/customer/addresses             -> Address
-//   PATCH /api/v1/customer/addresses/:id/default -> void
-// Keeping a single seed + storage key here so /my-profile and the Book Now
-// modal always see the same list while we're frontend-only.
 
 export const MOCK_ADDRESSES_SEED: Address[] = [
   {
@@ -17,6 +10,8 @@ export const MOCK_ADDRESSES_SEED: Address[] = [
     poBoxNumber: "12345",
     state: "Dubai",
     city: "Downtown Dubai",
+    stateId: "",
+    cityId: "",
     isDefault: true,
   },
   {
@@ -27,6 +22,8 @@ export const MOCK_ADDRESSES_SEED: Address[] = [
     poBoxNumber: "67890",
     state: "Dubai",
     city: "Jumeirah",
+    stateId: "",
+    cityId: "",
     isDefault: false,
   },
 ];
