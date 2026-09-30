@@ -66,7 +66,14 @@ function GatewayForm({
   return (
     <>
       <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm text-left">
-        <PaymentElement options={{ layout: "tabs" }} />
+        <PaymentElement
+          options={{
+            layout: "tabs",
+            defaultValues: {
+              billingDetails: { address: { country: "AE" } },
+            },
+          }}
+        />
         <button
           onClick={handlePay}
           disabled={busy || !stripe || !elements}

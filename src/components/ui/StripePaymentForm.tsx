@@ -61,7 +61,14 @@ function InnerForm({ amount, currency, onSuccess, onError }: Omit<StripePaymentF
       <p className="text-xs text-gray-400 mb-6">Checkout for booking payment</p>
 
       <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm text-left">
-        <PaymentElement options={{ layout: "tabs" }} />
+        <PaymentElement
+          options={{
+            layout: "tabs",
+            defaultValues: {
+              billingDetails: { address: { country: "AE" } },
+            },
+          }}
+        />
         {message && <p className="text-xs text-red-500 mt-3">{message}</p>}
 
         <button
