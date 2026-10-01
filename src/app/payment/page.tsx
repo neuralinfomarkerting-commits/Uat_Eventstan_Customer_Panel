@@ -490,7 +490,7 @@ export default function PaymentPage() {
             </svg>
           </div>
           <h2 className="text-lg font-bold text-gray-900 mb-1">
-            Booking Confirmed!
+            Booking Request!
           </h2>
           <p className="text-gray-500 text-sm">
             Your {draft.isPromotional ? "promotional " : ""}booking was paid and
@@ -520,7 +520,7 @@ export default function PaymentPage() {
             </span>
           )}
           <p className="text-gray-700 text-xs font-semibold mt-3 break-all">
-            Booking ID: {bookingId}
+            Order ID: {bookingId}
           </p>
           <button
             onClick={() => router.push("/bookings")}
