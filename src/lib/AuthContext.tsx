@@ -20,7 +20,8 @@ interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string; name?: string }>;
-  signup: (name: string, email: string, phone: string, password: string, type: "individual" | "corporate") => Promise<{ ok: boolean; error?: string; welcomeEmailSent?: boolean }>;
+  signup: (name: string, email: string, phone: string, password: string, verificationToken: string, type: "individual" | "corporate") => Promise<{ ok: boolean; error?: string; welcomeEmailSent?: boolean }>;
+  googleLogin: () => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
   updateProfile: (updates: UpdateProfileInput) => Promise<{ ok: boolean; error?: string }>;
   refreshUser: () => Promise<void>;
@@ -111,14 +112,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signup = async (name: string, email: string, phone: string, password: string, type: "individual" | "corporate") => {
+  const signup = async (name: string, email: string, phone: string, password: string, verificationToken: string, type: "individual" | "corporate") => {
     try {
-      const response = await customerApi.auth.register(name, email, phone, password);
+      const response = await customerApi.auth.register(name, email, phone, password, verificationToken);
       saveSession(response, type);
       await loadProfile(type).catch(() => undefined);
       return { ok: true, welcomeEmailSent: response.welcomeEmailSent };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "Sign up failed." };
+    }
+  };
+
+  const googleLogin = async () => {
+    try {
+      const { getGoogleIdToken } = await import("@/lib/firebase");
+      const idToken = await getGoogleIdToken();
+      const response = await customerApi.auth.google(idToken);
+      if (response.user.role !== "CUSTOMER") return { ok: false, error: "Please use the correct portal for this account." };
+      saveSession(response);
+      await loadProfile().catch(() => undefined);
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "Google sign-in failed." };
     }
   };
 
@@ -199,7 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, signup, logout, updateProfile, refreshUser, addAddress, updateAddress, deleteAddress }}
+      value={{ user, loading, login, signup, googleLogin, logout, updateProfile, refreshUser, addAddress, updateAddress, deleteAddress }}
     >
       {children}
     </AuthContext.Provider>

@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { customerApi, Country } from "@/api/customerApi";
 
 export default function SignupPage() {
-  const { signup, user } = useAuth();
+  const { signup, googleLogin, user } = useAuth();
   const router = useRouter();
 
   const [name,     setName]     = useState("");
@@ -18,7 +18,9 @@ export default function SignupPage() {
   const [error,    setError]    = useState("");
   const [loading,  setLoading]  = useState(false);
   const [focused,  setFocused]  = useState<string | null>(null);
-  const [step,     setStep]     = useState<1 | 2>(1);
+  const [step,     setStep]     = useState<1 | 2 | 3>(1);
+  const [otp, setOtp] = useState("");
+  const [verificationToken, setVerificationToken] = useState("");
   const [countries, setCountries]   = useState<Country[]>([]);
   const [countryCode, setCountryCode] = useState("+971");
   const [codeOpen, setCodeOpen]       = useState(false);
@@ -47,13 +49,35 @@ export default function SignupPage() {
   const strengthLabel = ["", "Weak", "Fair", "Good", "Strong"][pwStrength];
   const strengthColor = ["", "bg-red-400", "bg-amber-400", "bg-blue-400", "bg-green-500"][pwStrength];
 
-  const handleStep1 = (e: React.FormEvent) => {
+  const handleStep1 = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim())  { setError("Please enter your full name."); return; }
     if (!email.trim()) { setError("Please enter your email."); return; }
     if (!phone.trim()) { setError("Please enter your phone number."); return; }
-    setError("");
-    setStep(2);
+    setError(""); setLoading(true);
+    try {
+      await customerApi.auth.requestRegistrationOtp(email.trim());
+      setStep(2);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Could not send verification code.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!/^\d{6}$/.test(otp)) { setError("Enter the six-digit verification code."); return; }
+    setError(""); setLoading(true);
+    try {
+      const result = await customerApi.auth.verifyRegistrationOtp(email.trim(), otp);
+      setVerificationToken(result.verificationToken);
+      setStep(3);
+    } catch (verifyError) {
+      setError(verifyError instanceof Error ? verifyError.message : "Verification failed.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -62,10 +86,18 @@ export default function SignupPage() {
     if (pwStrength < 2)       { setError("Please choose a stronger password."); return; }
     setError(""); setLoading(true);
     const fullPhone = `${countryCode}${phone.replace(/^0+/, "")}`;
-    const res = await signup(name, email, fullPhone, password, "individual");
+    const res = await signup(name, email, fullPhone, password, verificationToken, "individual");
     setLoading(false);
     if (res.ok) router.push("/");
     else setError(res.error || "Sign up failed.");
+  };
+
+  const handleGoogleSignup = async () => {
+    setError(""); setLoading(true);
+    const result = await googleLogin();
+    setLoading(false);
+    if (result.ok) router.push("/");
+    else setError(result.error || "Google sign-up failed.");
   };
 
   const inputBase = "w-full bg-transparent pl-10 pr-4 py-3 text-sm text-gray-900 placeholder-gray-400 rounded-xl focus:outline-none";
@@ -145,7 +177,7 @@ export default function SignupPage() {
 
           {/* Step indicator */}
           <div className="flex items-center gap-2 mb-6">
-            {([1, 2] as const).map(s => (
+            {([1, 2, 3] as const).map(s => (
               <div key={s} className="flex items-center gap-2">
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${step >= s ? "bg-orange-500 text-white" : "bg-gray-200 text-gray-400"}`}>
                   {step > s
@@ -153,21 +185,32 @@ export default function SignupPage() {
                     : s}
                 </div>
                 <span className={`text-xs font-medium ${step >= s ? "text-gray-700" : "text-gray-400"}`}>
-                  {s === 1 ? "Your Info" : "Password"}
+                  {s === 1 ? "Your Info" : s === 2 ? "Verify Email" : "Password"}
                 </span>
-                {s < 2 && <div className={`w-10 h-px mx-1 ${step > s ? "bg-orange-400" : "bg-gray-200"}`} />}
+                {s < 3 && <div className={`w-6 h-px mx-1 ${step > s ? "bg-orange-400" : "bg-gray-200"}`} />}
               </div>
             ))}
           </div>
 
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-gray-900 mb-1">
-              {step === 1 ? "Create your account" : "Set your password"}
+              {step === 1 ? "Create your account" : step === 2 ? "Verify your email" : "Set your password"}
             </h1>
             <p className="text-gray-400 text-sm">
-              {step === 1 ? "Start planning unforgettable events." : "Almost there — just secure your account."}
+              {step === 1 ? "Start planning unforgettable events." : step === 2 ? `We sent a six-digit code to ${email}.` : "Almost there — just secure your account."}
             </p>
           </div>
+
+          {step === 1 && (
+            <>
+              <button type="button" onClick={handleGoogleSignup} disabled={loading}
+                className="w-full mb-4 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold py-3 rounded-xl text-sm transition-colors disabled:opacity-60 flex items-center justify-center gap-3">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.5-.2-2.2H12v4.3h5.4a4.6 4.6 0 0 1-2 3v2.8h3.3c1.9-1.8 2.9-4.4 2.9-7.9z"/><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.7-2.4l-3.3-2.8c-.9.6-2.1 1-3.4 1a5.9 5.9 0 0 1-5.5-4.1H3.1v2.9A10 10 0 0 0 12 22z"/><path fill="#FBBC05" d="M6.5 13.7a6 6 0 0 1 0-3.4V7.4H3.1a10 10 0 0 0 0 9.2l3.4-2.9z"/><path fill="#EA4335" d="M12 6.2c1.5 0 2.8.5 3.9 1.5l2.9-2.9A9.8 9.8 0 0 0 3.1 7.4l3.4 2.9A5.9 5.9 0 0 1 12 6.2z"/></svg>
+                Continue with Google
+              </button>
+              <div className="flex items-center gap-3 mb-4"><div className="h-px bg-gray-200 flex-1"/><span className="text-xs text-gray-400 uppercase">or use email</span><div className="h-px bg-gray-200 flex-1"/></div>
+            </>
+          )}
 
           {error && (
             <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-xl mb-4">
@@ -260,8 +303,8 @@ export default function SignupPage() {
                 </div>
               </div>
 
-              <button type="submit" className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3.5 rounded-xl text-sm transition-all shadow-md shadow-orange-200 flex items-center justify-center gap-2">
-                Continue
+              <button type="submit" disabled={loading} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3.5 rounded-xl text-sm transition-all shadow-md shadow-orange-200 flex items-center justify-center gap-2 disabled:opacity-60">
+                {loading ? "Sending code..." : "Continue"}
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
               </button>
             </form>
@@ -269,6 +312,31 @@ export default function SignupPage() {
 
           {/* STEP 2 */}
           {step === 2 && (
+            <form onSubmit={handleVerifyOtp} className="space-y-4">
+              <div>
+                <label htmlFor="otp" className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">Verification Code</label>
+                <div className={boxClass("otp")}>
+                  <input id="otp" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={otp} required placeholder="000000"
+                    onChange={e => { setOtp(e.target.value.replace(/\D/g, "")); setError(""); }}
+                    onFocus={() => setFocused("otp")} onBlur={() => setFocused(null)}
+                    className="w-full bg-transparent px-4 py-3 text-center text-xl tracking-[0.5em] font-bold text-gray-900 rounded-xl focus:outline-none" />
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => { setStep(1); setOtp(""); setError(""); }} className="flex-1 border border-gray-200 text-gray-700 py-3 rounded-xl text-sm font-medium hover:bg-gray-100">← Back</button>
+                <button type="submit" disabled={loading || otp.length !== 6} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl text-sm disabled:opacity-60">{loading ? "Verifying..." : "Verify Email"}</button>
+              </div>
+              <button type="button" disabled={loading} onClick={async () => {
+                setLoading(true); setError("");
+                try { await customerApi.auth.requestRegistrationOtp(email.trim()); setOtp(""); }
+                catch (resendError) { setError(resendError instanceof Error ? resendError.message : "Could not resend code."); }
+                finally { setLoading(false); }
+              }} className="w-full text-sm text-orange-500 font-semibold disabled:opacity-50">Resend code</button>
+            </form>
+          )}
+
+          {/* STEP 3 */}
+          {step === 3 && (
             <form onSubmit={handleSubmit} className="space-y-4">
 
               {/* Password */}
@@ -334,7 +402,7 @@ export default function SignupPage() {
               </p>
 
               <div className="flex gap-3">
-                <button type="button" onClick={() => { setStep(1); setError(""); }}
+                <button type="button" onClick={() => { setStep(2); setError(""); }}
                   className="flex-1 border border-gray-200 text-gray-700 py-3 rounded-xl text-sm font-medium hover:bg-gray-100 transition-colors">
                   ← Back
                 </button>

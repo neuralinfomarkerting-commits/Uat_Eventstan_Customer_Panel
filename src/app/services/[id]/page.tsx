@@ -139,7 +139,7 @@ export default function ServiceDetailPage({
               <img
                 src={gallery[galleryIndex]}
                 alt={`${service.title} - ${galleryIndex + 1}`}
-                className="w-full h-full object-contain transition-all duration-500"
+                className="w-full h-full object-cover transition-all duration-500"
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-gray-300">
