@@ -20,7 +20,7 @@ interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string; name?: string }>;
-  signup: (name: string, email: string, phone: string, password: string, verificationToken: string, type: "individual" | "corporate") => Promise<{ ok: boolean; error?: string; welcomeEmailSent?: boolean }>;
+  signup: (name: string, email: string, phone: string, password: string, verificationToken: string, type: "individual" | "corporate", countryCode?: string) => Promise<{ ok: boolean; error?: string; welcomeEmailSent?: boolean }>;
   googleLogin: () => Promise<{ ok: boolean; error?: string }>;
   logout: () => void;
   updateProfile: (updates: UpdateProfileInput) => Promise<{ ok: boolean; error?: string }>;
@@ -112,9 +112,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signup = async (name: string, email: string, phone: string, password: string, verificationToken: string, type: "individual" | "corporate") => {
+  const signup = async (name: string, email: string, phone: string, password: string, verificationToken: string, type: "individual" | "corporate", countryCode?: string) => {
     try {
-      const response = await customerApi.auth.register(name, email, phone, password, verificationToken);
+      const response = await customerApi.auth.register(name, email, phone, password, verificationToken, countryCode);
       saveSession(response, type);
       await loadProfile(type).catch(() => undefined);
       return { ok: true, welcomeEmailSent: response.welcomeEmailSent };

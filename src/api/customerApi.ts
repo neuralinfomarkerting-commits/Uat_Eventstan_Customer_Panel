@@ -466,10 +466,10 @@ export const customerApi = {
         method: "POST",
         body: JSON.stringify({ email, otp }),
       }),
-    register: (name: string, email: string, phone: string, password: string, verificationToken: string) =>
+    register: (name: string, email: string, phone: string, password: string, verificationToken: string, countryCode?: string) =>
       request<AuthResponse>("/auth/register", {
         method: "POST",
-        body: JSON.stringify({ name, email, phone, password, verificationToken }),
+        body: JSON.stringify({ name, email, phone, countryCode, password, verificationToken }),
       }),
     me: () => request<ApiProfile>("/auth/me"),
     updateMe: (payload: UpdateProfileInput) =>

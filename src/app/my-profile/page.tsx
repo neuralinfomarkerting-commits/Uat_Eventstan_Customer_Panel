@@ -128,10 +128,16 @@ export default function ProfilePage() {
       setEmail(user.email ?? "");
       setGender(user.gender ?? "");
       setDob(isoToDdmmyyyy(user.dateOfBirth));
-      const rawPhone = user.phone ?? (user.countryCode ? `${user.countryCode}${user.mobile ?? ""}` : "");
-      const { code, number } = splitPhone(rawPhone, countries);
-      setCountryCode(user.countryCode || code);
-      setPhone(user.mobile ?? number);
+      const storedPhone = (user.phone ?? "").trim();
+      if (storedPhone.startsWith("+")) {
+        // Older accounts: whole number was saved in `phone` -> split it for display
+        const { code, number } = splitPhone(storedPhone, countries);
+        setCountryCode(user.countryCode || code);
+        setPhone(number);
+      } else {
+        setCountryCode(user.countryCode || "+971");
+        setPhone(user.mobile ?? storedPhone);
+      }
     }
   }, [user, countries]);
 

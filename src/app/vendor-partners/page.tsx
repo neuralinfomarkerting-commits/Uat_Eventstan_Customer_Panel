@@ -1,5 +1,6 @@
 "use client";
 
+import CountryCodeSelect from "@/components/ui/CountryCodeSelect";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { 
@@ -166,7 +167,6 @@ const Page = () => {
 
   const [countries, setCountries] = useState<Country[]>([]);
   const [countryCode, setCountryCode] = useState("+971");
-  const [codeOpen, setCodeOpen] = useState(false);
   const [phoneFocused, setPhoneFocused] = useState(false);
 
   const [cities, setCities] = useState<City[]>([]);
@@ -512,54 +512,7 @@ const Page = () => {
                         }`}
                       >
                         {/* Country code dropdown */}
-                        <div className="relative flex-shrink-0">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              setCodeOpen((o) => !o);
-                            }}
-                            className="flex items-center gap-1 pl-3.5 pr-2 py-3 text-sm text-gray-700 font-medium border-r border-gray-200 focus:outline-none"
-                          >
-                            <span>
-                              {countries.find((c) => c.phoneCode === countryCode)?.flag ?? "🌐"}
-                            </span>
-                            <span>{countryCode}</span>
-                            <svg
-                              className={`w-3 h-3 text-gray-400 transition-transform ${codeOpen ? "rotate-180" : ""}`}
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                            </svg>
-                          </button>
-
-                          {codeOpen && (
-                            <>
-                              <div className="fixed inset-0 z-10" onClick={() => setCodeOpen(false)} />
-                              <div className="absolute z-20 top-full left-0 mt-1 w-56 max-h-56 overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-lg py-1">
-                                {countries.map((c) => (
-                                  <button
-                                    key={c.id}
-                                    type="button"
-                                    onClick={() => {
-                                      setCountryCode(c.phoneCode);
-                                      setCodeOpen(false);
-                                    }}
-                                    className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-orange-50 ${
-                                      c.phoneCode === countryCode ? "bg-orange-50 text-orange-600" : "text-gray-700"
-                                    }`}
-                                  >
-                                    <span>{c.flag}</span>
-                                    <span className="flex-1 truncate">{c.name}</span>
-                                    <span className="text-gray-400">{c.phoneCode}</span>
-                                  </button>
-                                ))}
-                              </div>
-                            </>
-                          )}
-                        </div>
+                        <CountryCodeSelect value={countryCode} onChange={setCountryCode} countries={countries} buttonClassName="pl-3.5 pr-2 py-3" />
 
                         <input
                           type="tel"

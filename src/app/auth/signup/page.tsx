@@ -85,8 +85,8 @@ export default function SignupPage() {
     if (password !== confirm) { setError("Passwords do not match."); return; }
     if (pwStrength < 2)       { setError("Please choose a stronger password."); return; }
     setError(""); setLoading(true);
-    const fullPhone = `${countryCode}${phone.replace(/^0+/, "")}`;
-    const res = await signup(name, email, fullPhone, password, verificationToken, "individual");
+    const localPhone = phone.replace(/^0+/, "");
+    const res = await signup(name, email, localPhone, password, verificationToken, "individual", countryCode);
     setLoading(false);
     if (res.ok) router.push("/");
     else setError(res.error || "Sign up failed.");
