@@ -451,10 +451,25 @@ export const customerApi = {
         method: "POST",
         body: JSON.stringify({ email, password }),
       }),
-    register: (name: string, email: string, phone: string, password: string) =>
+    google: (idToken: string) =>
+      request<AuthResponse>("/auth/google", {
+        method: "POST",
+        body: JSON.stringify({ idToken }),
+      }),
+    requestRegistrationOtp: (email: string) =>
+      request<{ message: string; expiresInSeconds: number; resendAfterSeconds: number }>("/auth/registration/request-otp", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      }),
+    verifyRegistrationOtp: (email: string, otp: string) =>
+      request<{ verified: boolean; verificationToken: string; expiresInSeconds: number }>("/auth/registration/verify-otp", {
+        method: "POST",
+        body: JSON.stringify({ email, otp }),
+      }),
+    register: (name: string, email: string, phone: string, password: string, verificationToken: string) =>
       request<AuthResponse>("/auth/register", {
         method: "POST",
-        body: JSON.stringify({ name, email, phone, password }),
+        body: JSON.stringify({ name, email, phone, password, verificationToken }),
       }),
     me: () => request<ApiProfile>("/auth/me"),
     updateMe: (payload: UpdateProfileInput) =>

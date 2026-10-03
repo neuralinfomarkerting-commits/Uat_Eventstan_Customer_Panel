@@ -216,12 +216,6 @@ export default function AboutPage() {
             >
               Browse Services
             </Link>
-            <Link
-              href="/vendor-partners"
-              className="bg-gray-900 text-white px-7 py-3 rounded-full font-semibold hover:bg-gray-800 transition-colors"
-            >
-              Become a Vendor
-            </Link>
           </div>
         </div>
       </section>

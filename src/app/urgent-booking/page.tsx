@@ -333,7 +333,7 @@ const SearchableSelect = ({
                     onClick={() => handleSelect(option)}
                     className="w-full px-4 py-2.5 text-sm text-left hover:bg-orange-50 transition-colors flex items-center justify-between"
                   >
-                    <span>{option}</span>
+                    <span className="text-gray-800">{option}</span>
                     {value === option && <Check className="h-4 w-4 text-orange-500 flex-shrink-0" />}
                   </button>
                 ))
